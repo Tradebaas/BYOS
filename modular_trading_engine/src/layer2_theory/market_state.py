@@ -117,7 +117,14 @@ class MarketTheoryState:
                 
         # 3. Escalation & Tracking for existing trackers
         for tracker in self.reverse_trackers:
-            tracker.process_candle(candle)
+            # An origin is considered 'valid' for this Hold Level if the MOST RECENT OriginTracker
+            # has completed its 2 tests (creating the Origin Level) AND belongs to the SAME macro structure
+            # (e.g., tracking a resistance ceiling Origin for a resistance Hold Level).
+            related_origin_valid = any(
+                ot.level_data.is_bullish == tracker.level_data.is_bullish and ot.test_count >= 2
+                for ot in self.origin_trackers
+            )
+            tracker.process_candle(candle, origin_is_valid=related_origin_valid)
             
         for tracker in self.range_trend_trackers:
             tracker.process_candle(candle)
