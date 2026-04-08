@@ -1,6 +1,11 @@
 import requests
 import logging
-from typing import Optional
+import time
+import urllib.parse
+from datetime import datetime, timezone
+from typing import Optional, List
+
+from src.layer1_data.models import Candle
 from src.layer3_strategy.models import OrderIntent
 from src.layer4_execution.models_broker import TopstepCredentials, TopstepOrderResponse
 
@@ -22,6 +27,126 @@ class TopstepClient:
             "Authorization": f"Bearer {self.credentials.jwt_token}",
             "Content-Type": "application/json"
         })
+
+    CHART_API_URL = "https://chartapi.topstepx.com/History/v2"
+
+    def fetch_historical_bars(self, symbol: str = "/NQ", resolution: str = "1", lookback_mins: int = 1000) -> List[Candle]:
+        """
+        Fetches historical candles directly from the TopstepX Chart API.
+        Used to 'warm up' the engine with pre-loaded 1-minute tracking data.
+        """
+        end_time_sec = int(time.time())
+        start_time_sec = end_time_sec - (lookback_mins * 60)
+        
+        params = {
+            "Symbol": symbol,
+            "Resolution": resolution,
+            "From": start_time_sec,
+            "To": end_time_sec
+        }
+        
+        # Build the exact URL parameters
+        url = f"{self.CHART_API_URL}?{urllib.parse.urlencode(params)}"
+        
+        # We need specific headers to safely fetch chart data without getting blocked
+        headers = {
+            "Authorization": f"Bearer {self.credentials.jwt_token}",
+            "Origin": "https://www.topstepx.com",
+            "x-app-type": "web",
+            "x-app-version": "1.22.50",
+            "Accept": "application/json"
+        }
+        
+        candles: List[Candle] = []
+        try:
+            logger.info(f"Fetching {lookback_mins} minutes of historical data for {symbol} ...")
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            bars = data.get("bars", [])
+            # Sort chronologically (ascending time) so the engine can process them sequentially
+            bars = sorted(bars, key=lambda x: x.get("t", 0))
+            
+            for b in bars:
+                raw_t = b.get("t", 0)
+                if raw_t > 1e11: # usually ms if very large
+                    dt = datetime.fromtimestamp(raw_t / 1000.0, tz=timezone.utc)
+                else:
+                    dt = datetime.fromtimestamp(raw_t, tz=timezone.utc)
+                    
+                candle = Candle(
+                    timestamp=dt,
+                    open=float(b.get("o", 0.0)),
+                    high=float(b.get("h", 0.0)),
+                    low=float(b.get("l", 0.0)),
+                    close=float(b.get("c", 0.0)),
+                    volume=float(b.get("v", 0.0))
+                )
+                candles.append(candle)
+                
+            logger.info(f"Successfully fetched and sorted {len(candles)} historical candles for {symbol}.")
+            return candles
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch historical bars from Chart API: {e}")
+            return []
+
+    def fetch_historical_bars_range(self, from_sec: int, to_sec: int, symbol: str = "/NQ", resolution: str = "1") -> List[Candle]:
+        """
+        Fetches historical candles directly from the TopstepX Chart API for a specific time window.
+        Used specifically for building and updating the local Data Lake.
+        """
+        params = {
+            "Symbol": symbol,
+            "Resolution": resolution,
+            "From": from_sec,
+            "To": to_sec
+        }
+        
+        url = f"{self.CHART_API_URL}?{urllib.parse.urlencode(params)}"
+        
+        headers = {
+            "Authorization": f"Bearer {self.credentials.jwt_token}",
+            "Origin": "https://www.topstepx.com",
+            "x-app-type": "web",
+            "x-app-version": "1.22.50",
+            "Accept": "application/json"
+        }
+        
+        candles: List[Candle] = []
+        try:
+            logger.info(f"Fetching historical data for {symbol} from TS {from_sec} to {to_sec}...")
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            bars = data.get("bars", [])
+            bars = sorted(bars, key=lambda x: x.get("t", 0))
+            
+            for b in bars:
+                raw_t = b.get("t", 0)
+                if raw_t > 1e11: # usually ms if very large
+                    dt = datetime.fromtimestamp(raw_t / 1000.0, tz=timezone.utc)
+                else:
+                    dt = datetime.fromtimestamp(raw_t, tz=timezone.utc)
+                    
+                candle = Candle(
+                    timestamp=dt,
+                    open=float(b.get("o", 0.0)),
+                    high=float(b.get("h", 0.0)),
+                    low=float(b.get("l", 0.0)),
+                    close=float(b.get("c", 0.0)),
+                    volume=float(b.get("v", 0.0))
+                )
+                candles.append(candle)
+                
+            logger.info(f"Successfully fetched {len(candles)} historical candles.")
+            return candles
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch historical bars range from Chart API: {e}")
+            return []
 
     def _get_active_contract(self, base_symbol: str = "NQ") -> Optional[str]:
         """

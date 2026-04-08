@@ -38,31 +38,43 @@ class MarketTheoryState:
         # 1. Base Detection
         new_levels = []
         
-        # Hold Level Detection (needs last 2 candles)
-        if len(self.candle_buffer) >= 2:
-            prev = self.candle_buffer[-2]
-            curr = self.candle_buffer[-1]
-            
-            # Support Hold Level (Bearish -> Bullish)
-            if prev.is_bearish and curr.is_bullish:
+        curr = self.candle_buffer[-1]
+
+        # Hold Level Detection via Candidates and Hard Close Validation
+        # 1. Update candidates
+        if curr.is_bullish:
+            if getattr(self, 'resistance_candidate', None) is None or curr.open > self.resistance_candidate.open:
+                self.resistance_candidate = curr
+        elif curr.is_bearish:
+            if getattr(self, 'support_candidate', None) is None or curr.open < self.support_candidate.open:
+                self.support_candidate = curr
+
+        # 2. Validate candidates via Hard Close
+        if getattr(self, 'resistance_candidate', None) is not None:
+            # Resistance Hold Level (Bullish candidate validated by Bearish Hard Close under its Low)
+            if curr.is_bearish and curr.open < self.resistance_candidate.low and curr.close < self.resistance_candidate.low:
                 new_levels.append(TheoryLevel(
-                    timestamp=prev.timestamp,
-                    level_type=LevelType.HOLD_LEVEL,
-                    is_bullish=True,
-                    price_high=prev.high,
-                    price_low=prev.low,
-                    status="identified"
-                ))
-            # Resistance Hold Level (Bullish -> Bearish)
-            elif prev.is_bullish and curr.is_bearish:
-                new_levels.append(TheoryLevel(
-                    timestamp=prev.timestamp,
+                    timestamp=self.resistance_candidate.timestamp,
                     level_type=LevelType.HOLD_LEVEL,
                     is_bullish=False,
-                    price_high=prev.high,
-                    price_low=prev.low,
+                    price_high=self.resistance_candidate.high,
+                    price_low=self.resistance_candidate.low,
                     status="identified"
                 ))
+                self.resistance_candidate = None  # Reset after validation
+
+        if getattr(self, 'support_candidate', None) is not None:
+            # Support Hold Level (Bearish candidate validated by Bullish Hard Close above its High)
+            if curr.is_bullish and curr.open > self.support_candidate.high and curr.close > self.support_candidate.high:
+                new_levels.append(TheoryLevel(
+                    timestamp=self.support_candidate.timestamp,
+                    level_type=LevelType.HOLD_LEVEL,
+                    is_bullish=True,
+                    price_high=self.support_candidate.high,
+                    price_low=self.support_candidate.low,
+                    status="identified"
+                ))
+                self.support_candidate = None  # Reset after validation
 
         # Break Level Detection (needs last 3 candles)
         if len(self.candle_buffer) == 3:

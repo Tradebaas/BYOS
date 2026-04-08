@@ -20,7 +20,8 @@ class ReverseTracker:
         
         self.level_data = initial_level
         self.hits = 0 # Unlike Break Levels, the creation of a Hold Level does not count as a 'hit'.
-        self.candles_since_last_hit = 0
+        self.is_separated = False
+        self.is_converted = False
         self.is_active = True
         
     def process_candle(self, candle: Candle):
@@ -47,19 +48,27 @@ class ReverseTracker:
         hit_occurred = is_tested(self.level_data, candle)
         
         if hit_occurred:
-            # To be an independent hit, we need separation (at least 1 candle not hitting it)
-            if self.candles_since_last_hit >= 1:
+            # To be an independent hit, we MUST have achieved separation via a detached opposite-color candle first.
+            if getattr(self, 'is_separated', False):
                 self.hits += 1
                 
                 # Escalate to Reverse Level on the second independent hit
                 if self.hits == 2 and self.level_data.level_type == LevelType.HOLD_LEVEL:
                     self._update_level_model(level_type=LevelType.REVERSE_LEVEL, status="active")
             
-            # Reset separation counter because we just touched it
-            self.candles_since_last_hit = 0
+            # Reset separation because we just touched it
+            self.is_separated = False
         else:
-            # We didn't hit it, so it counts as separation
-            self.candles_since_last_hit += 1
+            # We didn't hit it. Check if this candle achieves separation.
+            # Separation is strictly defined as an opposite-color candle fully detached from the level.
+            if self.level_data.is_bullish:
+                # Support Level: Needs a BEARISH candle completely ABOVE the level
+                if candle.is_bearish and candle.low > self.level_data.price_low:
+                    self.is_separated = True
+            else:
+                # Resistance Level: Needs a BULLISH candle completely BELOW the level
+                if candle.is_bullish and candle.high < self.level_data.price_high:
+                    self.is_separated = True
 
     def _update_level_model(self, level_type: Optional[LevelType] = None, status: Optional[str] = None):
         """
