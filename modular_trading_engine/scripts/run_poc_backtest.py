@@ -120,7 +120,7 @@ def get_5m_trend(state_5m: MarketTheoryState) -> Optional[bool]:
 # 'greedy' : Lowest untested Hold Level for LONG, Highest for SHORT.
 # 'closest_time' : Untested Hold Level that was formed closest in time to the Origin Level.
 # 'closest_price' : Untested Hold Level that is closest in price to the Origin Level bounds.
-HOLD_LEVEL_SELECTION_MODE = 'closest_time'
+HOLD_LEVEL_SELECTION_MODE = 'latest'
 
 def main():
     csv_path = Path(__file__).parent.parent / "data" / "historical" / "NQ_1min.csv"
@@ -184,100 +184,104 @@ def main():
         broker.tick_candle_end()
 
         # 5. Execute Strategy Logic
-        if not broker.open_position and not broker.active_order:
-            # Check 5m trend bias
-            trend_bullish = get_5m_trend(state_5m)
-            if trend_bullish is None:
-                continue
-                
-            # Filter the origin levels by trend and ONLY accept if they mathematically escalated to ORIGIN_LEVEL
-            active_origins = [o for o in state_1m.origin_trackers 
-                              if o.level_data.is_bullish == trend_bullish 
-                              and o.is_active 
-                              and o.level_data.level_type == LevelType.ORIGIN_LEVEL]
-                              
-            if not active_origins:
-                continue
+        if broker.open_position:
+            # We already have a position, skip looking for new entries
+            continue
 
-            # We consider the most recently established valid origin level
-            latest_origin_tracker = active_origins[-1]
+        # Instead of strict 5m trend, use the most recent Origin Level to dictate direction
+        # Find ALL active origin levels
+        active_origins = [o for o in state_1m.origin_trackers 
+                          if o.is_active 
+                          and o.level_data.level_type == LevelType.ORIGIN_LEVEL]
+                          
+        if not active_origins:
+            continue
+
+        # We consider the most recently established valid origin level
+        latest_origin_tracker = active_origins[-1]
+        trend_bullish = latest_origin_tracker.level_data.is_bullish
+        
+        # Origin test count filter: 
+        # test_count = 2 means the Origin Level is just created (Break tested twice).
+        # test_count = 3 means the Origin Level is tested 1x itself.
+        if latest_origin_tracker.test_count <= 3:
+            # Setup is valid.
+            # Filter valid Hold Levels:
+            # 1. Must match direction (is_bullish == is_bullish)
+            # 2. Must be untested (t.hits == 0)
+            # 3. Must be formed AFTER the original Break Level began (t.level_data.timestamp > current_origin.timestamp)
+            valid_trackers = [
+                t for t in state_1m.reverse_trackers 
+                if t.level_data.is_bullish == trend_bullish 
+                and t.hits == 0
+            ]
             
-            # Origin test count filter: 
-            # test_count = 2 means the Origin Level is just created (Break tested twice).
-            # test_count = 3 means the Origin Level is tested 1x itself.
-            if latest_origin_tracker.test_count <= 3:
-                # Setup is valid.
-                # Filter valid Hold Levels:
-                # 1. Must match direction (is_bullish == is_bullish)
-                # 2. Must be untested (t.hits == 0)
-                # 3. Must be formed AFTER the original Break Level began (t.level_data.timestamp > current_origin.timestamp)
-                valid_trackers = [
-                    t for t in state_1m.reverse_trackers 
-                    if t.level_data.is_bullish == trend_bullish 
-                    and t.hits == 0
-                    and t.level_data.timestamp > latest_origin_tracker.level_data.timestamp
-                ]
+            if valid_trackers:
+                valid_holds = [t.level_data for t in valid_trackers]
                 
-                if valid_trackers:
-                    valid_holds = [t.level_data for t in valid_trackers]
-                    
-                    if HOLD_LEVEL_SELECTION_MODE == 'greedy':
-                        if trend_bullish:
-                            selected_hold = min(valid_holds, key=lambda h: h.price_low)
-                        else:
-                            selected_hold = max(valid_holds, key=lambda h: h.price_high)
-                            
-                    elif HOLD_LEVEL_SELECTION_MODE == 'closest_price':
-                        origin_p = latest_origin_tracker.level_data.price_low if trend_bullish else latest_origin_tracker.level_data.price_high
-                        if trend_bullish:
-                            selected_hold = min(valid_holds, key=lambda h: abs(h.price_high - origin_p))
-                        else:
-                            selected_hold = min(valid_holds, key=lambda h: abs(h.price_low - origin_p))
-                            
-                    elif HOLD_LEVEL_SELECTION_MODE == 'closest_time':
-                        origin_t = latest_origin_tracker.level_data.timestamp
-                        # Find the Hold Level with the smallest absolute time difference to the Origin Level
-                        selected_hold = min(valid_holds, key=lambda h: abs((h.timestamp - origin_t).total_seconds()))
-                        
+                if HOLD_LEVEL_SELECTION_MODE == 'greedy':
+                    if trend_bullish:
+                        selected_hold = min(valid_holds, key=lambda h: h.price_low)
                     else:
-                        selected_hold = valid_holds[-1] # Fallback
+                        selected_hold = max(valid_holds, key=lambda h: h.price_high)
                         
-                    # Calculate Limit Price (Offset: 2 ticks = 0.50 points)
-                    # Scan back for the exact candle matching the timestamp to get its open price.
-                    hold_candle_c1 = next((c for c in reversed(candles_1m[:i+1]) if c.timestamp == selected_hold.timestamp), None)
-                    if hold_candle_c1:
-                        hold_open = hold_candle_c1.open
+                elif HOLD_LEVEL_SELECTION_MODE == 'closest_price':
+                    origin_p = latest_origin_tracker.level_data.price_low if trend_bullish else latest_origin_tracker.level_data.price_high
+                    if trend_bullish:
+                        selected_hold = min(valid_holds, key=lambda h: abs(h.price_high - origin_p))
+                    else:
+                        selected_hold = min(valid_holds, key=lambda h: abs(h.price_low - origin_p))
                         
-                        if trend_bullish:
-                            limit_price = hold_open + 0.50
-                            sl_price = limit_price - 15.0  # 60 ticks
-                            tp_price = limit_price + 30.0  # 120 ticks
-                        else:
-                            limit_price = hold_open - 0.50
-                            sl_price = limit_price + 15.0
-                            tp_price = limit_price - 30.0
-                            
-                        # Place order
-                        broker.active_order = Order(
-                            is_long=trend_bullish,
-                            limit_price=limit_price,
-                            sl_price=sl_price,
-                            tp_price=tp_price,
-                            ttl_candles=20
-                        )
+                elif HOLD_LEVEL_SELECTION_MODE == 'latest':
+                    # Find the Hold Level that was formed most recently (chronologically)
+                    selected_hold = max(valid_holds, key=lambda h: h.timestamp)
+                    
+                elif HOLD_LEVEL_SELECTION_MODE == 'closest_time':
+                    origin_t = latest_origin_tracker.level_data.timestamp
+                    selected_hold = min(valid_holds, key=lambda h: abs((h.timestamp - origin_t).total_seconds()))
+                    
+                else:
+                    selected_hold = valid_holds[-1] # Fallback
+                    
+                # Calculate Limit Price (Offset: 2 ticks = 0.50 points)
+                # Scan back for the exact candle matching the timestamp to get its open price.
+                hold_candle_c1 = next((c for c in reversed(candles_1m[:i+1]) if c.timestamp == selected_hold.timestamp), None)
+                if hold_candle_c1:
+                    hold_open = hold_candle_c1.open
+                    
+                    if trend_bullish:
+                        limit_price = hold_open + 0.50
+                        sl_price = limit_price - 15.0  # 60 ticks
+                        tp_price = limit_price + 30.0  # 120 ticks
+                    else:
+                        limit_price = hold_open - 0.50
+                        sl_price = limit_price + 15.0
+                        tp_price = limit_price - 30.0
                         
-                        # Attach metadata for logging
-                        broker.active_order.meta_origin_start = latest_origin_tracker.level_data.timestamp
-                        broker.active_order.meta_origin_price_bounds = (latest_origin_tracker.level_data.price_low, latest_origin_tracker.level_data.price_high)
+                    # Place order
+                    broker.active_order = Order(
+                        is_long=trend_bullish,
+                        limit_price=limit_price,
+                        sl_price=sl_price,
+                        tp_price=tp_price,
+                        ttl_candles=20
+                    )
+                    
+                    with open("orders_placed.txt", "a") as f:
+                        f.write(f"PLACED: {broker.active_order.is_long} at {limit_price} for Origin: {latest_origin_tracker.level_data.timestamp} Hold: {selected_hold.timestamp} Time: {curr_c.timestamp}\n")
+                    
+                    # Attach metadata for logging
+                    broker.active_order.meta_origin_start = latest_origin_tracker.level_data.timestamp
+                    broker.active_order.meta_origin_price_bounds = (latest_origin_tracker.level_data.price_low, latest_origin_tracker.level_data.price_high)
+                    
+                    tests = latest_origin_tracker.test_history
+                    if len(tests) > 0:
+                        broker.active_order.meta_test_1 = tests[0]
+                    if len(tests) > 1:
+                        broker.active_order.meta_test_2 = tests[1]
                         
-                        tests = latest_origin_tracker.test_history
-                        if len(tests) > 0:
-                            broker.active_order.meta_test_1 = tests[0]
-                        if len(tests) > 1:
-                            broker.active_order.meta_test_2 = tests[1]
-                            
-                        broker.active_order.meta_hold_time = selected_hold.timestamp
-                        broker.active_order.meta_hold_price_open = hold_candle_c1.open
+                    broker.active_order.meta_hold_time = selected_hold.timestamp
+                    broker.active_order.meta_hold_price_open = hold_candle_c1.open
 
         # Print progress
         if (i + 1) % 10000 == 0:

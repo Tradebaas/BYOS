@@ -71,11 +71,11 @@ class OriginTracker:
             # Separation is strictly defined as an opposite-color candle fully detached from the level.
             if self.level_data.is_bullish:
                 # Support Level: Needs a BEARISH candle completely ABOVE the level
-                if candle.is_bearish and candle.low > self.level_data.price_low:
+                if candle.is_bearish and candle.low > self.level_data.price_high:
                     self.is_separated = True
             else:
                 # Resistance Level: Needs a BULLISH candle completely BELOW the level
-                if candle.is_bullish and candle.high < self.level_data.price_high:
+                if candle.is_bullish and candle.high < self.level_data.price_low:
                     self.is_separated = True
 
     def _update_level_model(self, level_type: Optional[LevelType] = None, status: Optional[str] = None):

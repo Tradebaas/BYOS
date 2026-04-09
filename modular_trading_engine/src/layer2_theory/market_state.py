@@ -43,35 +43,39 @@ class MarketTheoryState:
         # Hold Level Detection via Candidates and Hard Close Validation
         # 1. Update candidates
         if curr.is_bullish:
-            if getattr(self, 'resistance_candidate', None) is None or curr.open > self.resistance_candidate.open:
+            if getattr(self, 'resistance_candidate', None) is None or curr.high > self.resistance_candidate.high:
                 self.resistance_candidate = curr
         elif curr.is_bearish:
-            if getattr(self, 'support_candidate', None) is None or curr.open < self.support_candidate.open:
+            if getattr(self, 'support_candidate', None) is None or curr.low < self.support_candidate.low:
                 self.support_candidate = curr
 
         # 2. Validate candidates via Hard Close
         if getattr(self, 'resistance_candidate', None) is not None:
             # Resistance Hold Level (Bullish candidate validated by Bearish Hard Close under its Low)
-            if curr.is_bearish and curr.open < self.resistance_candidate.low and curr.close < self.resistance_candidate.low:
+            # Only the CLOSE needs to break the low to validate the structure.
+            if curr.is_bearish and curr.close < self.resistance_candidate.low:
                 new_levels.append(TheoryLevel(
                     timestamp=self.resistance_candidate.timestamp,
                     level_type=LevelType.HOLD_LEVEL,
                     is_bullish=False,
                     price_high=self.resistance_candidate.high,
                     price_low=self.resistance_candidate.low,
+                    price_open=self.resistance_candidate.open,
                     status="identified"
                 ))
                 self.resistance_candidate = None  # Reset after validation
 
         if getattr(self, 'support_candidate', None) is not None:
             # Support Hold Level (Bearish candidate validated by Bullish Hard Close above its High)
-            if curr.is_bullish and curr.open > self.support_candidate.high and curr.close > self.support_candidate.high:
+            # Only the CLOSE needs to break the high to validate the structure.
+            if curr.is_bullish and curr.close > self.support_candidate.high:
                 new_levels.append(TheoryLevel(
                     timestamp=self.support_candidate.timestamp,
                     level_type=LevelType.HOLD_LEVEL,
                     is_bullish=True,
                     price_high=self.support_candidate.high,
                     price_low=self.support_candidate.low,
+                    price_open=self.support_candidate.open,
                     status="identified"
                 ))
                 self.support_candidate = None  # Reset after validation

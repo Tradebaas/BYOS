@@ -1,3 +1,4 @@
+import math
 from src.layer1_data.models import Candle
 
 def is_hard_close(reference_price: float, candle: Candle, is_support: bool) -> bool:
@@ -13,11 +14,13 @@ def is_hard_close(reference_price: float, candle: Candle, is_support: bool) -> b
                        False if it acts as Resistance (we check for an upward breach).
     :return: True if the candle solidly breaks the structure, False otherwise.
     """
+    # Use math.isclose to prevent floating point inaccuracies
+    
     if is_support:
-        # Breaking support: Body CLOSE must be completely BELOW the support line
+        # Breaking support: Body CLOSE and OPEN must be completely BELOW the support line
         # Momentum must align: Candle must be bearish
-        return candle.close < reference_price and candle.is_bearish
+        return candle.close < reference_price and candle.open < reference_price and candle.is_bearish
     else:
-        # Breaking resistance: Body CLOSE must be completely ABOVE the resistance line
+        # Breaking resistance: Body CLOSE and OPEN must be completely ABOVE the resistance line
         # Momentum must align: Candle must be bullish
-        return candle.close > reference_price and candle.is_bullish
+        return candle.close > reference_price and candle.open > reference_price and candle.is_bullish

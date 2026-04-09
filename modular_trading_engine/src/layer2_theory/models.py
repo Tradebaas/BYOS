@@ -24,6 +24,7 @@ class TheoryLevel(BaseModel):
     # Mathematical boundaries of the structure (e.g. wick and body extremes)
     price_high: float = Field(..., ge=0.0) 
     price_low: float = Field(..., ge=0.0)
+    price_open: float = Field(0.0, ge=0.0) # The open of the candidate forming the level
     
     # e.g., 'identified', 'active', 'invalidated'. We recreate objects when status changes.
     status: str
