@@ -145,14 +145,15 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
         return len(history)
 
     def process(self, context: PipelineContext) -> None:
-        if context.active_polarity_is_bullish is None:
-            return
-            
+        # We now loop over both directions symmetrically, discarding any macro theory.
+        # Premium/Discount natively filters out mathematically invalid combinations anyway.
+        self.process_direction(context, True)
+        self.process_direction(context, False)
+
+    def process_direction(self, context: PipelineContext, is_bullish: bool) -> None:
         history = context.theory_state.history
         if not history:
             return
-            
-        is_bullish = context.active_polarity_is_bullish
         
         # 1. 200 Candle Logic memory enforcement
         bias_window_size = self.params.get('bias_window_size', 200)
@@ -293,7 +294,8 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                             
                         locked_until_idx = self.simulate_trade_lock(history, hc2 + 1, entry, sl, tp, is_bullish, ttl_candles)
                         
-                        # Store as our latest candidate
+                        # Store as our latest candidate, carrying over the modified frontrun entry
+                        active_block_2['frontrun_entry'] = entry
                         latest_valid_setup = active_block_2
                     
                     # RESET completely: wait for NEXT Trap/Test
@@ -319,7 +321,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     is_bullish=is_bullish,
                     price_high=latest_valid_setup['break'], 
                     price_low=latest_valid_setup['break'],
-                    price_open=latest_valid_setup['hold'],
+                    price_open=latest_valid_setup.get('frontrun_entry', latest_valid_setup['hold']),
                     status="identified_hl2"
                 )
                 context.setup_candidates.append(RetroScannerTracker(level_data))

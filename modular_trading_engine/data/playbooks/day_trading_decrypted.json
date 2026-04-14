@@ -2,12 +2,6 @@
     "strategy_id": "DTD-Topstep-Golden",
     "pipeline": [
         {
-            "module_type": "OriginHighlanderFilter",
-            "params": {
-                "max_level_tests_allowed": 2
-            }
-        },
-        {
             "module_type": "ConfirmationHoldLevelTrigger",
             "params": {
                 "bias_window_size": 200
@@ -21,12 +15,6 @@
                 "end_hour": 23,
                 "end_minute": 59,
                 "timezone": "America/New_York"
-            }
-        },
-        {
-            "module_type": "DynamicBiasFilter",
-            "params": {
-                "window": 200
             }
         },
         {
