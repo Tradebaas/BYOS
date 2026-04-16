@@ -53,8 +53,8 @@ class AccountManager:
         """
         try:
             # We directly use the session from the unmodified client
-            pos_response = self.client._session.get(f"{self.client.BASE_URL}/Position")
-            orders_response = self.client._session.get(f"{self.client.BASE_URL}/Order")
+            pos_response = self.client._session.get(f"https://userapi.topstepx.com/Position?accountId={self.account_id}")
+            orders_response = self.client._session.get(f"https://userapi.topstepx.com/Order?accountId={self.account_id}")
             
             positions = pos_response.json() if pos_response.ok else []
             orders = orders_response.json() if orders_response.ok else []
@@ -99,13 +99,13 @@ class AccountManager:
         # Topstep positions typically show 'netSize' != 0
         active_pos = None
         for p in positions:
-            if p.get("netSize", 0) != 0 and self.symbol in p.get("symbol", ""):
+            if p.get("positionSize", 0) != 0 and self.symbol in p.get("symbolName", ""):
                 active_pos = p
                 break
                 
         # 2. Break-Even Management on active positions
         if active_pos:
-            size_remaining = abs(active_pos.get("netSize", 0))
+            size_remaining = abs(active_pos.get("positionSize", 0))
             # If we had 4 contracts originally and now have 2, TP1 hit!
             if size_remaining == 2:
                 # We need to move SL to BE
@@ -118,7 +118,7 @@ class AccountManager:
         # If we have any un-triggered limit orders, we check if they are still valid or need cancelling.
         # But per the plan, 1 active position lock also covers pending limits.
         # We assume if we have working limits, we shouldn't place more.
-        working_entry_orders = [o for o in orders if o.get("status") in ["Working", "Pending"] and o.get("type", 1) == 1 and not o.get("isStop")]
+        working_entry_orders = [o for o in orders if o.get("status") in [1, "Working", "Pending"] and o.get("type", 1) == 1 and not o.get("isStop")]
 
         # Evaluate rule engine intents
         intents = self.rule_engine.evaluate(theory_state=self.theory_state, timestamp=latest_candle.timestamp)
@@ -165,7 +165,8 @@ class AccountManager:
 
 
 class LiveFleetCommander:
-    def __init__(self):
+    def __init__(self, strategy_name=None):
+        self.strategy_name = strategy_name
         self.accounts = []
         self.global_settings = {}
         # Strategy specific execution
@@ -175,7 +176,12 @@ class LiveFleetCommander:
 
     def load_config(self):
         try:
-            with open(CONFIG_FILE, "r") as f:
+            if self.strategy_name:
+                config_path = Path(root_dir) / "modular_trading_engine" / "strategies" / self.strategy_name / "execution_config.json"
+            else:
+                config_path = Path(root_dir) / "modular_trading_engine" / "execution_config.json"
+                
+            with open(config_path, "r") as f:
                 data = json.load(f)
                 self.global_settings = data.get("global_settings", {})
                 return data.get("accounts", [])
@@ -201,7 +207,11 @@ class LiveFleetCommander:
                 self.data_client = client
                 
             if not self.rule_engine:
-                playbook_path = Path(root_dir) / "modular_trading_engine" / "data" / "playbooks" / "day_trading_decrypted.json"
+                if self.strategy_name:
+                    playbook_path = Path(root_dir) / "modular_trading_engine" / "strategies" / self.strategy_name / "strategy_playbook.json"
+                else:
+                    playbook_path = Path(root_dir) / "modular_trading_engine" / "data" / "playbooks" / "day_trading_decrypted.json"
+                
                 playbook_config = ConfigParser.load_playbook(str(playbook_path))
                 self.rule_engine = RuleEngine(playbook_config)
                 
@@ -342,7 +352,12 @@ class LiveFleetCommander:
                 await asyncio.sleep(5) # Delay on error before retry
 
 if __name__ == "__main__":
-    commander = LiveFleetCommander()
+    import argparse
+    parser = argparse.ArgumentParser(description='Live Fleet Commander Orchestrator')
+    parser.add_argument('--strategy', type=str, help='Name of the strategy pod (e.g., dtd_golden_setup)', default=None)
+    args = parser.parse_args()
+
+    commander = LiveFleetCommander(strategy_name=args.strategy)
     asyncio.run(commander.initialize())
     try:
         asyncio.run(commander.run_forever())

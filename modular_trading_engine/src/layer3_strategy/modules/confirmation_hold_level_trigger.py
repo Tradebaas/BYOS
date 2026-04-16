@@ -131,18 +131,10 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
             # Cancelled after TTL
             return start_idx + ttl_candles
             
-        # 2. Filled! Track until SL or TP
-        for k in range(fill_idx, len(history)):
-            ck = history[k]
-            if not is_bullish:
-                if ck.high >= sl or ck.low <= tp:
-                    return k
-            else:
-                if ck.low <= sl or ck.high >= tp:
-                    return k
-                    
-        # Still open at end of history
-        return len(history)
+        # 2. Filled / Touched!
+        # Playbook Rule: "Zodra de entry level is geraakt, is de setup geconsumeerd/getest."
+        # We return fill_idx so the engine stops emitting this Intent and starts scanning for a new Block natively.
+        return fill_idx
 
     def process(self, context: PipelineContext) -> None:
         # We now loop over both directions symmetrically, discarding any macro theory.
@@ -197,22 +189,18 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 for k in range(b1_hc + 1, curr_c1 + 1):
                     ck = history[k]
                     if not is_bullish:
-                        if ck.high >= active_block_1['break']:
-                            was_invalidated = True
-                            break
+
                         # HARD CLOSE INVALIDATION: Green candle closing above Hold Level
-                        if ck.is_bullish and ck.close > active_block_1['hold']:
+                        if ck.is_bullish and ck.open > active_block_1['hold'] and ck.close > active_block_1['hold']:
                             was_invalidated = True
                             break
                         # The test can ONLY happen after the previous trade lock expires
                         if ck.high >= active_block_1['hold'] and k > locked_until_idx:
                             found_test = k
                     else:
-                        if ck.low <= active_block_1['break']:
-                            was_invalidated = True
-                            break
+
                         # HARD CLOSE INVALIDATION: Red candle closing below Hold Level
-                        if ck.is_bearish and ck.close < active_block_1['hold']:
+                        if ck.is_bearish and ck.open < active_block_1['hold'] and ck.close < active_block_1['hold']:
                             was_invalidated = True
                             break
                         if ck.low <= active_block_1['hold'] and k > locked_until_idx:
@@ -234,17 +222,13 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 for k in range(active_block_2['hc_idx'] + 1, b['c1_idx'] + 1):
                     ck = history[k]
                     if not is_bullish:
-                        if ck.high >= active_block_1['break']:
-                            was_invalidated = True
-                            break
-                        if ck.is_bullish and ck.close > active_block_1['hold']:
+
+                        if ck.is_bullish and ck.open > active_block_1['hold'] and ck.close > active_block_1['hold']:
                             was_invalidated = True
                             break
                     else:
-                        if ck.low <= active_block_1['break']:
-                            was_invalidated = True
-                            break
-                        if ck.is_bearish and ck.close < active_block_1['hold']:
+
+                        if ck.is_bearish and ck.open < active_block_1['hold'] and ck.close < active_block_1['hold']:
                             was_invalidated = True
                             break
                 if was_invalidated:

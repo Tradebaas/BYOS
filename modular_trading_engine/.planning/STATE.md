@@ -1,17 +1,21 @@
 # Project State
 
-**Current Phase:** Phase 2 Complete. Ready for Phase 3.
-**Status:** All mathematical Layer 2 modules and their orchestrator are fully functional, 100% test-covered, and stateless.
+**Current Phase:** Phase 4 Complete. Ready for Phase 5 (Live Execution).
+**Status:** We have successfully built Layer 3 (Playbooks & Rule Engine) and Layer 4 (Backtest Simulator & DataVault). The engine can rapidly test parameters against historical data using standalone JSON strategy configs.
 
 ## Completed Phases
 - **Phase 1:** Data Pipeline (Initialization Complete).
-- **Phase 2.0:** Mathematical detectors (`hold_level.py`, `break_level.py`, `hard_close.py`, `origin_state_machine.py`).
-- **Phase 2.1:** Remaining Horizontal Modules (`reverse_level_tracker.py`, `deep_dive_tracker.py`, `polarity_tracker.py`, `pandoras_box_tracker.py`, `trend_tracker.py`).
-- **Phase 2.2:** The Global Theory Board (`market_state.py`). Real-time orchestration using a rolling candle buffer, bubbling input to child trackers and maintaining unified states.
+- **Phase 2.0 - 2.2:** Mathematical detectors and Global Theory Board (`market_state.py`).
+- **Phase 3:** Layer 3 - Strategy Playbooks. JSON schema parser (`playbook_schema.py`), `RuleEngine`, and `Orchestrator` are fully operational.
+- **Phase 4:** Layer 4 - The Core Lab / Backtest Engine. Built an ultra-fast local backtester (`simulator.py`) using Gray Candle safety constraints, Trade Excursions (MFE/MAE), and Breakeven logic. 
 
 ## Next Actions
-- Initiate **Phase 3 (Layer 3 - Strategy Playbooks)** to define the JSON configuration parser and Rule Engine, transforming theory states into actionable execution signals.
+- We are now ready to tackle **Phase 5 (Live Execution & TopStep Integration)** or iterate further natively within Phase 4 to build Trend Filters/Session filters for the Strategy builder.
 
 ## Open Issues / Notes
-- `market_state.py` currently instantiates generic trackers natively. In Phase 3, we may need to dynamically toggle specific auxiliary trackers based on config (`STRATEGY_SCHEMA_BLUEPRINT.md`).
-- We need to establish an output format for the orchestrator when a Strategy condition is met (e.g., boolean target flags vs `OrderIntent` emission).
+- To prevent insane drawdowns on 1-min timeframes, we need to inject HTF Trend Filters (like a 50/200 EMA) or Time-of-Day constraints before moving to live execution.
+
+## Accumulated Context
+### Roadmap Evolution
+- Phase 04.1 inserted after Phase 4: TradingView Pine Script Mechanics Parity Refactor (URGENT)
+- Phase 6 added: Build Neumorphic Dashboard for Zebas Engine

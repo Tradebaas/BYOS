@@ -20,17 +20,37 @@
 - [x] Route raw TopStep `candle` objects to all active trackers simultaneously.
 - [x] Create real-time state querying interface for Layer 3 (Active Highlanders, Targets).
 
-## Phase 3: Layer 3 - Strategy Playbooks
-- [ ] Design JSON configuration parser based on `STRATEGY_SCHEMA_BLUEPRINT.md`.
-- [ ] Implement Rule Engine to compare live `MarketTheoryState` (Phase 2.2) against JSON rules (e.g., `origin_tests_max`).
-- [ ] Build execution signal output mechanism upon theory match.
+## Phase 3: Layer 3 - Strategy Playbooks (Completed)
+- [x] Design JSON configuration parser based on `STRATEGY_SCHEMA_BLUEPRINT.md`.
+- [x] Implement Rule Engine to compare live `MarketTheoryState` (Phase 2.2) against JSON rules (e.g., `origin_tests_max`).
+- [x] Build execution signal output mechanism upon theory match.
 
-## Phase 4: The Core Lab / Backtest Engine
-- [ ] Scaffolding of a virtual Layer 1 (Historical CSV rapid ingestion) and virtual Layer 4 (Simulated execution metrics).
-- [ ] Run full DayTrading Decrypted logic end-to-end to capture MFE/MAE matrices.
-- [ ] Optimize limit offsets and target ratios using pure data output.
+## Phase 4: The Core Lab / Backtest Engine (Completed)
+- [x] Scaffolding of a virtual Layer 1 (Historical CSV rapid ingestion) and virtual Layer 4 (Simulated execution metrics).
+- [x] Run full DayTrading Decrypted logic end-to-end to capture MFE/MAE matrices.
+- [x] Optimize limit offsets and target ratios using pure data output.
+
+### Phase 04.1: TradingView Pine Script Mechanics Parity Refactor (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 04.1 to break down)
 
 ## Phase 5: Live Execution & TopStep Integration
 - [ ] Connect `BrokerIntegrator` interface natively to TopStep WS/REST.
-- [ ] Implement Fleet Commander orchestrator for real Multi-Account limits and bracket orders (OCO).
-- [ ] Enforce max loss rules and Risk management.
+- [ ] Implement `live_fleet_commander.py` orchestrator for real Multi-Account limits and golden ratio Native Brackets (OCO).
+- [ ] Enforce max loss rules, recovery mechanisms, and multi-bracket scaling (BE triggers).
+
+### Phase 6: Build Neumorphic Dashboard for Zebas Engine
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 6 to break down)

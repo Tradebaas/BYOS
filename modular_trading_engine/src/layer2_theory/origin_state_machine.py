@@ -23,7 +23,9 @@ class OriginTracker:
         self.test_count = 0  
         self.test_history = [] # Store as (timestamp, string representation of hit price)
         
-        self.is_separated = False
+        self.waiting_opposite = True
+        self.waiting_retest = False
+        
         self.is_converted = False
         self.is_active = True
         
@@ -47,36 +49,50 @@ class OriginTracker:
             self._update_level_model(status="invalidated")
             return
             
-        # 2. Test Rule: Does the candle test the level?
-        hit_occurred = is_tested(self.level_data, candle)
+        # Determine basic candle properties
+        green = candle.is_bullish
+        red = candle.is_bearish
         
-        if hit_occurred:
-            # To be an independent hit, we MUST have achieved separation via a detached opposite-color candle first.
-            if getattr(self, 'is_separated', False):
-                self.test_count += 1
+        # We need historical context to check red[1] and green[1].
+        # Assuming the caller doesn't pass history directly, we can maintain the last candle's color.
+        prev_green = getattr(self, '_prev_green', False)
+        prev_red = getattr(self, '_prev_red', False)
+        
+        # Structure Reset (Pine logic)
+        # if (is_break_up and red and red[1]) or (not is_break_up and green and green[1])
+        is_break_up = not self.level_data.is_bullish  # Bearish = is_break_up
+        
+        if (is_break_up and red and prev_red) or (not is_break_up and green and prev_green):
+            self.waiting_opposite = True
+            self.waiting_retest = False
+            
+        if self.waiting_opposite:
+            if is_break_up and green:
+                self.waiting_opposite = False
+                self.waiting_retest = True
+            elif not is_break_up and red:
+                self.waiting_opposite = False
+                self.waiting_retest = True
                 
-                # Determine hit price based on support/resistance
-                hit_price = candle.low if self.level_data.is_bullish else candle.high
+        # Touch detection
+        hit_occurred = is_tested(self.level_data, candle)
+        if self.waiting_retest and hit_occurred:
+            valid_close = green if is_break_up else red
+            if valid_close:
+                self.test_count += 1
+                self.waiting_retest = False
+                
+                # Determine hit price
+                hit_price = candle.high if is_break_up else candle.low
                 self.test_history.append((candle.timestamp, hit_price))
                 
-                # Escalate to Origin Level on exactly the SECOND independent test
-                # According to theoretical blueprints: A Break Level tested twice becomes an Origin Level.
+                # Escalate to Origin
                 if self.test_count == 2 and self.level_data.level_type == LevelType.BREAK_LEVEL:
                     self._update_level_model(level_type=LevelType.ORIGIN_LEVEL, status="active")
-            
-            # Reset separation because we just touched it
-            self.is_separated = False
-        else:
-            # We didn't hit it. Check if this candle achieves separation.
-            # Separation is strictly defined as an opposite-color candle fully detached from the level.
-            if self.level_data.is_bullish:
-                # Support Level: Needs a BEARISH candle completely ABOVE the level
-                if candle.is_bearish and candle.low > self.level_data.price_high:
-                    self.is_separated = True
-            else:
-                # Resistance Level: Needs a BULLISH candle completely BELOW the level
-                if candle.is_bullish and candle.high < self.level_data.price_low:
-                    self.is_separated = True
+                    
+        # Store for next iteration
+        self._prev_green = green
+        self._prev_red = red
 
     def _update_level_model(self, level_type: Optional[LevelType] = None, status: Optional[str] = None):
         """

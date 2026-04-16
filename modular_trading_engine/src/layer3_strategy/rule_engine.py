@@ -1,62 +1,43 @@
-from typing import List
+from typing import List, Dict, Any
 from datetime import datetime
 
 from src.layer2_theory.market_state import MarketTheoryState
 from src.layer3_strategy.models import OrderIntent
 from src.layer3_strategy.playbook_schema import PlaybookConfig
-from src.layer3_strategy.orchestrator import evaluate_setup
+from src.layer3_strategy.pipeline_context import PipelineContext
+from src.layer3_strategy.modules import MODULE_REGISTRY
 
 class RuleEngine:
     """
-    The main Comparator of the Trading Engine.
-    Takes pure Layer 2 MarketTheoryState wiskunde and evaluates it against
-    strict Layer 3 JSON Playbook parameters to generate absolute OrderIntents.
+    The Modular Comparator of the Trading Engine.
+    Executes a dynamic pipeline of Module nodes (read from Playbook JSON) 
+    over the wiskundige (mathematical) MarketTheoryState logic.
     """
     def __init__(self, playbook: PlaybookConfig):
-        self.playbook = playbook
+        self.strategy_id = playbook.strategy_id
+        self.pipeline_modules = []
+        
+        # Instantiate pipeline modules dynamically based on Playbook JSON
+        for step in playbook.pipeline:
+            module_class = MODULE_REGISTRY.get(step.module_type)
+            if not module_class:
+                raise ValueError(f"Unknown module type in playbook: {step.module_type}")
+                
+            # Inject strategy_id into RATLimitOrder params automatically
+            params_copy = dict(step.params)
+            if step.module_type == "RATLimitOrder":
+                params_copy['strategy_id'] = self.strategy_id
+                
+            self.pipeline_modules.append(module_class(params=params_copy))
 
     def evaluate(self, theory_state: MarketTheoryState, timestamp: datetime) -> List[OrderIntent]:
         """
-        Runs the exact playbook rules over the currently active MarketTheoryState.
+        Runs the full modular pipeline on the currently active MarketTheoryState.
+        Each module mutates the context, with the final module appending OrderIntents.
         """
-        intents: List[OrderIntent] = []
+        context = PipelineContext(theory_state=theory_state, timestamp=timestamp)
         
-        # 1. Sweep through all Origin Trackers
-        for tracker in theory_state.origin_trackers:
-            # We must only evaluate levels that are fully active
-            if not tracker.is_active:
-                continue
-                
-            test_count = getattr(tracker, 'test_count', 0)
+        for module in self.pipeline_modules:
+            module.process(context)
             
-            # Use the orchestrator to build the pure limit order boundaries
-            intent = evaluate_setup(
-                level=tracker.level_data,
-                config=self.playbook,
-                test_count=test_count,
-                current_timestamp=timestamp
-            )
-            
-            if intent is not None:
-                intents.append(intent)
-                
-        # 2. Sweep through all Reverse Trackers (Hold Levels -> Reverse Levels)
-        for tracker in theory_state.reverse_trackers:
-            if not tracker.is_active:
-                continue
-                
-            # For reverse trackers, hits represent the test count
-            test_count = getattr(tracker, 'hits', 0)
-            
-            intent = evaluate_setup(
-                level=tracker.level_data,
-                config=self.playbook,
-                test_count=test_count,
-                current_timestamp=timestamp
-            )
-            
-            if intent is not None:
-                intents.append(intent)
-
-        # Result is a deterministic list of exact boundary conditions representing Tactical Intent
-        return intents
+        return context.intents

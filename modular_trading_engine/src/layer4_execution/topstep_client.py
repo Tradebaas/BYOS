@@ -5,9 +5,9 @@ import urllib.parse
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from src.layer1_data.models import Candle
-from src.layer3_strategy.models import OrderIntent
-from src.layer4_execution.models_broker import TopstepCredentials, TopstepOrderResponse
+from modular_trading_engine.src.layer1_data.models import Candle
+from modular_trading_engine.src.layer3_strategy.models import OrderIntent
+from modular_trading_engine.src.layer4_execution.models_broker import TopstepCredentials, TopstepOrderResponse
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class TopstepClient:
         
         candles: List[Candle] = []
         try:
-            logger.info(f"Fetching {lookback_mins} minutes of historical data for {symbol} ...")
+            logger.debug(f"Fetching {lookback_mins} minutes of historical data for {symbol} ...")
             response = requests.get(url, headers=headers)
             response.raise_for_status()
             data = response.json()
@@ -85,7 +85,7 @@ class TopstepClient:
                 )
                 candles.append(candle)
                 
-            logger.info(f"Successfully fetched and sorted {len(candles)} historical candles for {symbol}.")
+            logger.debug(f"Successfully fetched and sorted {len(candles)} historical candles for {symbol}.")
             return candles
             
         except Exception as e:
@@ -186,9 +186,18 @@ class TopstepClient:
         """
         side = 0 if intent.is_bullish else 1
 
-        # Distance = (Target_Price - Entry_Price) / Tick_Size
-        sl_ticks = int(round((intent.stop_loss - intent.entry_price) / self.tick_size))
-        tp_ticks = int(round((intent.take_profit - intent.entry_price) / self.tick_size))
+        # Defensieve Polariteit (Positief vs Negatief) via absolute math om wees-orders en API fails te voorkomen
+        sl_abs = abs(int(round((intent.stop_loss - intent.entry_price) / self.tick_size)))
+        tp_abs = abs(int(round((intent.take_profit - intent.entry_price) / self.tick_size)))
+
+        # Lange posities (Buy - Side 0): TP moet positief zijn (+), SL moet negatief zijn (-).
+        # Korte posities (Sell - Side 1): TP moet negatief zijn (-), SL moet positief zijn (+).
+        if intent.is_bullish:
+            sl_ticks = -sl_abs
+            tp_ticks = tp_abs
+        else:
+            sl_ticks = sl_abs
+            tp_ticks = -tp_abs
 
         return {
             "accountId": self.credentials.account_id,
@@ -229,12 +238,61 @@ class TopstepClient:
             data = response.json()
             
             # The API often returns 200 OK but sets error Code within body (like Code 2)
-            if data.get("error"):
-                e_code = data.get("error")
-                return TopstepOrderResponse(success=False, error_message="Topstep Logic Error", error_code=e_code)
+            if data.get("error") or data.get("success") is False:
+                e_code = data.get("error") or data.get("errorCode")
+                e_msg = data.get("errorMessage") or f"Logic Error: {data}"
+                return TopstepOrderResponse(success=False, error_message=e_msg, error_code=e_code)
                 
-            return TopstepOrderResponse(success=True, order_id=data.get("orderId", 0))
+            order_id = data.get("orderId", 0)
+            if not order_id:
+                # Fallbacks for arrays or nested ids the Topstep API might randomly use
+                if isinstance(data, dict) and "id" in data:
+                    order_id = data["id"]
+                elif isinstance(data, list) and len(data) > 0:
+                    order_id = data[0].get("id", data[0].get("orderId", 0))
+                else:    
+                    logger.warning(f"Raw API REST Response missing orderId key: {data}")
+                    
+            return TopstepOrderResponse(success=True, order_id=order_id)
             
         except Exception as e:
             logger.error(f"Failed to place order: {e}")
             return TopstepOrderResponse(success=False, error_message=str(e))
+
+    def cancel_all_orders(self, base_symbol: str = "NQ") -> bool:
+        """
+        Annuleert alle pending (working) entry orders op dit account/target om state schoon te vegen.
+        """
+        contract_id = self._get_active_contract(base_symbol)
+        if not contract_id:
+            return False
+            
+        payload = {
+            "accountId": self.credentials.account_id,
+            "contractId": contract_id
+        }
+        try:
+            response = self._session.post(f"{self.BASE_URL}/Order/cancelAll", json=payload)
+            return response.ok
+        except Exception as e:
+            logger.error(f"Failed to CancelAll: {e}")
+            return False
+
+    def flatten_position(self, base_symbol: str = "NQ") -> bool:
+        """
+        Noodstop: Rucksichtlos flatten van de actieve positie.
+        """
+        contract_id = self._get_active_contract(base_symbol)
+        if not contract_id:
+            return False
+            
+        payload = {
+            "accountId": self.credentials.account_id,
+            "contractId": contract_id
+        }
+        try:
+            response = self._session.post(f"{self.BASE_URL}/Position/close", json=payload)
+            return response.ok
+        except Exception as e:
+            logger.error(f"Failed to Flatten: {e}")
+            return False

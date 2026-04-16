@@ -14,7 +14,15 @@
                 "start_minute": 0,
                 "end_hour": 23,
                 "end_minute": 59,
-                "timezone": "America/New_York"
+                "timezone": "America/New_York",
+                "exclude_windows": [
+                    {
+                        "start_hour": 9,
+                        "start_minute": 20,
+                        "end_hour": 9,
+                        "end_minute": 40
+                    }
+                ]
             }
         },
         {
@@ -30,9 +38,7 @@
                 "entry_frontrun_ticks": 0,
                 "stop_loss_padding_ticks": 0,
                 "absolute_sl_points": 10.0,
-                "absolute_tp_points": 20.0,
-                "breakeven_trigger_rr": 0.4,
-                "breakeven_offset_ticks": 2
+                "absolute_tp_points": 20.0
             }
         }
     ]

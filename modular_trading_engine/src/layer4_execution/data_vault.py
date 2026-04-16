@@ -45,10 +45,23 @@ class DataVault:
         losses = total - wins
         win_rate = (wins / total * 100.0) if total > 0 else 0.0
         
+        max_drawdown = 0.0
+        peak = 0.0
+        cumulative = 0.0
+        for t in self.trades:
+            cumulative += t.pnl_points
+            if cumulative > peak:
+                peak = cumulative
+            
+            drawdown = peak - cumulative
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+        
         return {
             "total_trades": total,
             "wins": wins,
             "losses": losses,
             "win_rate_pct": round(win_rate, 2),
-            "net_pnl_points": sum(t.pnl_points for t in self.trades)
+            "net_pnl_points": sum(t.pnl_points for t in self.trades),
+            "max_drawdown_points": max_drawdown
         }

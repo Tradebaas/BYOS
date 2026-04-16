@@ -1,12 +1,12 @@
 import csv
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 from .models import Candle
 
 
-def load_historical_1m_data(file_path: Path | str) -> List[Candle]:
+def load_historical_1m_data(file_path: Union[Path, str]) -> List[Candle]:
     """
     Parses a standard OHLCV CSV file and returns a list of immutable Candle objects.
     Expected CSV columns (case-insensitive): time/timestamp, open, high, low, close.
@@ -24,7 +24,13 @@ def load_historical_1m_data(file_path: Path | str) -> List[Candle]:
         # Map headers for robust, case-insensitive fetching
         headers = {str(h).strip().lower(): str(h) for h in reader.fieldnames}
         
-        time_key = headers.get('time') or headers.get('timestamp') or headers.get('date')
+        time_key = (
+            headers.get('time') or 
+            headers.get('timestamp') or 
+            headers.get('date') or 
+            headers.get('timestamp_ms') or 
+            headers.get('datetime_utc')
+        )
         if not time_key:
             raise ValueError("CSV missing a time/timestamp column")
 
@@ -55,7 +61,8 @@ def load_historical_1m_data(file_path: Path | str) -> List[Candle]:
                 close=float(row[headers.get('close', 'close')]),
                 volume=float(row.get(headers.get('volume', 'volume'), 0.0))
             )
-            candles.append(candle)
+            if not candles or candles[-1].timestamp != candle.timestamp:
+                candles.append(candle)
             
     # Always guarantee sequential data for the timeline
     candles.sort(key=lambda c: c.timestamp)

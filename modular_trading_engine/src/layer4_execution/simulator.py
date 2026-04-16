@@ -12,6 +12,10 @@ class ActivePosition:
         # Initial bounds
         self.mfe = intent.entry_price
         self.mae = intent.entry_price
+        
+        # Trade Management State
+        self.current_stop_loss = intent.stop_loss
+        self.breakeven_activated = False
 
 class BacktestSimulator:
     """
@@ -37,9 +41,15 @@ class BacktestSimulator:
             self._evaluate_active_position(candle)
             return  # If we have an active position, we don't process new entries on the same tick
             
-        # Phase 2: Handle PENDING order (check for limit fills)
+        # Phase 2: Handle PENDING order (check for limit fills or expiration)
         if self.pending_intent is not None:
-            self._evaluate_pending_order(candle)
+            # Check for TTL Expiration (20 candles/minutes)
+            ttl_candles = (candle.timestamp - self.pending_intent.timestamp).total_seconds() / 60.0
+            if ttl_candles > 20:
+                # Expire the pending intent
+                self.pending_intent = None
+            else:
+                self._evaluate_pending_order(candle)
             
     def _evaluate_pending_order(self, candle: Candle) -> None:
         intent = self.pending_intent
@@ -69,13 +79,25 @@ class BacktestSimulator:
             if candle.high > pos.mfe: pos.mfe = candle.high
             if candle.low < pos.mae: pos.mae = candle.low
             
-            hit_sl = candle.low <= intent.stop_loss
+            # Trade Management: Breakeven Check
+            if not pos.breakeven_activated and intent.breakeven_trigger_price is not None:
+                if candle.high >= intent.breakeven_trigger_price:
+                    pos.current_stop_loss = intent.breakeven_target_price
+                    pos.breakeven_activated = True
+            
+            hit_sl = candle.low <= pos.current_stop_loss
             hit_tp = candle.high >= intent.take_profit
         else:
             if candle.low < pos.mfe: pos.mfe = candle.low
             if candle.high > pos.mae: pos.mae = candle.high
             
-            hit_sl = candle.high >= intent.stop_loss
+            # Trade Management: Breakeven Check
+            if not pos.breakeven_activated and intent.breakeven_trigger_price is not None:
+                if candle.low <= intent.breakeven_trigger_price:
+                    pos.current_stop_loss = intent.breakeven_target_price
+                    pos.breakeven_activated = True
+            
+            hit_sl = candle.high >= pos.current_stop_loss
             hit_tp = candle.low <= intent.take_profit
             
         # 2. Strict CCTA constraints for Gray Candles (worst-case assumption)
@@ -90,11 +112,13 @@ class BacktestSimulator:
     def _close_position(self, candle: Candle, pos: ActivePosition, is_win: bool) -> None:
         intent = pos.intent
         
-        # Absolute points captured/lost
-        if is_win:
-            pnl = abs(intent.take_profit - intent.entry_price)
+        # Dynamic PNL calculation supporting trailing/breakeven stops
+        if intent.is_bullish:
+            exit_price = intent.take_profit if is_win else pos.current_stop_loss
+            pnl = exit_price - intent.entry_price
         else:
-            pnl = -abs(intent.entry_price - intent.stop_loss)
+            exit_price = intent.take_profit if is_win else pos.current_stop_loss
+            pnl = intent.entry_price - exit_price
             
         record = TradeRecord(
             strategy_id=intent.strategy_id,
@@ -102,7 +126,7 @@ class BacktestSimulator:
             entry_time=intent.timestamp, # Record intent generation time
             exit_time=candle.timestamp,
             entry_price=intent.entry_price,
-            stop_loss=intent.stop_loss,
+            stop_loss=pos.current_stop_loss,
             take_profit=intent.take_profit,
             mfe=pos.mfe,
             mae=pos.mae,

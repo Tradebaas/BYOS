@@ -1,21 +1,21 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from typing import List, Dict, Any
+
+class PlaybookModuleConfig(BaseModel):
+    """
+    Configuration for a single step/module in the strategy pipeline.
+    """
+    module_type: str
+    params: Dict[str, Any] = Field(default_factory=dict)
+    
+    model_config = ConfigDict(frozen=True)
 
 class PlaybookConfig(BaseModel):
     """
     JSON-serializable configuration dictating exactly how Theory translates to Execution.
-    This represents the 'Setup Rules' for a given asset.
+    The strategy is built by defining a sequential pipeline of module steps.
     """
     strategy_id: str
-    
-    # Theory Filtering Rules
-    max_level_tests_allowed: int   # Prevents taking signals on overused levels
-    
-    # Asset Math
-    tick_size: float               # Example: 0.25 (NQ) or 0.5 (ES)
-    
-    # Order Padding (Tactics)
-    entry_frontrun_ticks: int      # Ticks added to pull entry closer to current price
-    stop_loss_padding_ticks: int   # Ticks padding behind the absolute boundary
-    take_profit_rr: float          # Risk/Reward multiplier for TP calculation (e.g., 2.0)
+    pipeline: List[PlaybookModuleConfig]
     
     model_config = ConfigDict(frozen=True)

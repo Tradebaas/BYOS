@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
+from typing import Optional
 
 class OrderIntent(BaseModel):
     """
@@ -16,5 +17,8 @@ class OrderIntent(BaseModel):
     # Metadata for execution and tracking
     strategy_id: str
     theory_reference_ts: float # Epoch of the TheoryLevel that triggered this
+    # Trade Management (Optional baked-in rules)
+    breakeven_trigger_price: Optional[float] = None
+    breakeven_target_price: Optional[float] = None
     
     model_config = ConfigDict(frozen=True)
