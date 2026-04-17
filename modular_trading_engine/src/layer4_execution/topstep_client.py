@@ -5,9 +5,9 @@ import urllib.parse
 from datetime import datetime, timezone
 from typing import Optional, List
 
-from modular_trading_engine.src.layer1_data.models import Candle
-from modular_trading_engine.src.layer3_strategy.models import OrderIntent
-from modular_trading_engine.src.layer4_execution.models_broker import TopstepCredentials, TopstepOrderResponse
+from src.layer1_data.models import Candle
+from src.layer3_strategy.models import OrderIntent
+from src.layer4_execution.models_broker import TopstepCredentials, TopstepOrderResponse
 
 logger = logging.getLogger(__name__)
 
