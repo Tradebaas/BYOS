@@ -166,7 +166,7 @@ class AccountManager:
 
 class LiveFleetCommander:
     def __init__(self, strategy_name=None):
-        self.strategy_name = strategy_name
+        self.strategy_name = strategy_name or "dtd_golden_setup"
         self.accounts = []
         self.global_settings = {}
         # Strategy specific execution
@@ -228,7 +228,7 @@ class LiveFleetCommander:
 
     async def run_forever(self):
         # 1. Warm-up phase (Local CSV -> API Gap Sync)
-        logger.info("Fleet Commander: Warming up internal ZebasEngine from historical DB...")
+        logger.info("Fleet Commander: Warming up internal TheoryEngine from historical DB...")
         csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "historical" / "NQ_1min.csv"
         
         last_processed_timestamp = None
@@ -277,7 +277,7 @@ class LiveFleetCommander:
                             # Schema: timestamp_ms,datetime_utc,open,high,low,close,volume,trade_count
                             writer.writerow([timestamp_ms, dt_str, b.open, b.high, b.low, b.close, b.volume, 0])
                             last_processed_timestamp = b.timestamp
-                logger.info("Successfully patched historical data gap and synchronized ZebasEngine.")
+                logger.info("Successfully patched historical data gap and synchronized TheoryEngine.")
             else:
                 logger.info("Local DB is fully up-to-date. No gap sync needed.")
         else:
@@ -306,7 +306,7 @@ class LiveFleetCommander:
                 recent_bars = self.data_client.fetch_historical_bars(symbol="/NQ", resolution="1", lookback_mins=5)
                 
                 # We ONLY process completely closed candles to prevent 'ghost ticks' 
-                # from permanently cementing a fake candle in the ZebasEngine state.
+                # from permanently cementing a fake candle in the TheoryEngine state.
                 current_minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
                 
                 new_bars = [

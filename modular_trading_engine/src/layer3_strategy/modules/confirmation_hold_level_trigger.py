@@ -225,21 +225,19 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                             is_valid_zone = True
                             
                     if is_valid_zone:
+                        sim_frontrun = self.params.get('sim_frontrun_points', 1.0)
                         if not is_bullish:
-                            # Short: Frontrun by placing entry 1 point LOWER
-                            entry = entry - 1.0
-                            sl = entry + sl_points
-                            tp = entry - tp_points
+                            sim_entry = entry - sim_frontrun
+                            sl = sim_entry + sl_points
+                            tp = sim_entry - tp_points
                         else:
-                            # Long: Frontrun by placing entry 1 point HIGHER
-                            entry = entry + 1.0
-                            sl = entry - sl_points
-                            tp = entry + tp_points
+                            sim_entry = entry + sim_frontrun
+                            sl = sim_entry - sl_points
+                            tp = sim_entry + tp_points
                             
-                        locked_until_idx = self.simulate_trade_lock(history, hc2 + 1, entry, sl, tp, is_bullish, ttl_candles)
+                        locked_until_idx = self.simulate_trade_lock(history, hc2 + 1, sim_entry, sl, tp, is_bullish, ttl_candles)
                         
-                        # Store as our latest candidate, carrying over the modified frontrun entry
-                        b2['frontrun_entry'] = entry
+                        # Store as our latest candidate (keeping mathematical hold level pure)
                         latest_valid_setup = b2
                         trade_generated = True
 
@@ -269,7 +267,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     is_bullish=is_bullish,
                     price_high=latest_valid_setup['break'], 
                     price_low=latest_valid_setup['break'],
-                    price_open=latest_valid_setup.get('frontrun_entry', latest_valid_setup['hold']),
+                    price_open=latest_valid_setup['hold'],
                     status="identified_hl2"
                 )
                 context.setup_candidates.append(RetroScannerTracker(level_data))
