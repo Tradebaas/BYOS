@@ -1,0 +1,447 @@
+//@version=6
+indicator("Tradebazen Break & Origin Levels", overlay=true,
+     max_lines_count=500, max_labels_count=500,
+     max_bars_back=500, max_boxes_count=20)
+
+//──────────────── VISUAL SETTINGS ────────────────
+
+grp_vis = "Visual Settings (Global)"
+line_width = input.int(1, "All Line Widths", minval=1, maxval=4, group=grp_vis)
+
+//──────────────── DISPLAY TOGGLES ────────────────
+
+grp_show = "Display Toggles"
+show_breaks = input.bool(false, "Show Untested Breaks", group=grp_show)
+show_tested = input.bool(false, "Show Tested Breaks", group=grp_show)
+show_origin = input.bool(true, "Show Origin Levels", group=grp_show)
+show_hold_untested = input.bool(true, "Show Untested Hold", group=grp_show)
+show_hold_tested   = input.bool(false, "Show Tested Hold", group=grp_show)
+show_counts = input.bool(false, "Show Counters", group=grp_show)
+
+//──────────────── COLOR SETTINGS ────────────────
+
+grp_col = "Colors (Bearish = Red/Black, Bullish = Green/Blue)"
+col_bear_untested = input.color(color.red,   "Bearish Untested", group=grp_col)
+col_bear_tested   = input.color(color.black, "Bearish Tested",   group=grp_col)
+col_bull_untested = input.color(color.green, "Bullish Untested", group=grp_col)
+col_bull_tested   = input.color(color.blue,  "Bullish Tested",   group=grp_col)
+
+//──────────────── ZONES ────────────────
+
+grp_zone = "Premium/Discount Zone"
+show_zones   = input.bool(false, "Show Premium/Discount (last 100)", group=grp_zone)
+zone_opacity = input.int(85, "Zone Opacity (0=solid, 100=transparent)", minval=0, maxval=100, group=grp_zone)
+zone_premium = input.color(color.red, "Premium Color", group=grp_zone)
+zone_discount= input.color(color.green, "Discount Color", group=grp_zone)
+
+//──────────────── LOOKBACK ────────────────
+
+grp_perf = "Performance"
+max_lookback = input.int(1000, "Max Lookback (bars)", group=grp_perf, minval=200, maxval=1000)
+
+//──────────────── TYPES ────────────────
+
+type BreakLevel
+    line ln
+    label lbl
+    float price
+    bool is_break_up
+    int testCount
+    bool waitingOpposite
+    bool waitingRetest
+    line holdLine
+    float holdPrice
+    bool holdValid
+    int holdTests
+    int originBar
+
+var breaks = array.new<BreakLevel>()
+
+//──────────────── HELPERS ────────────────
+
+touch(price, is_up) =>
+    bool t = false
+    if is_up
+        t := high >= price
+    else
+        t := low <= price
+    t
+
+hard_close(price, is_up) =>
+    bool result = false
+    if is_up
+        result := close > open and open > price
+    else
+        result := close < open and open < price
+    result
+
+//──────────────── ZONES STATE ────────────────
+
+var box premBox = na
+var box discBox = na
+zone_len = 100
+
+//──────────────── CREATE BREAK ────────────────
+
+create_break(price, is_up) =>
+    color col = is_up ? col_bear_untested : col_bull_untested
+
+    ln = line.new(bar_index-1, price,
+                  bar_index+5, price,
+                  extend=extend.none,
+                  color=col,
+                  style=line.style_dotted,
+                  width=line_width)
+
+    lbl = label.new(bar_index+5, price, "0",
+                    style=label.style_label_left,
+                    textcolor=color.white,
+                    color=color.black)
+
+    lvl = BreakLevel.new(ln, lbl, price, is_up, 0, false, false,
+                         na, na, false, 0, na)
+
+    array.push(breaks, lvl)
+
+//──────────────── BREAK DETECTION ────────────────
+
+green = close >= open
+red   = close < open
+
+if bar_index > 2
+    if green and green[1] and not green[2]
+        create_break(low[1], false)
+
+    if red and red[1] and not red[2]
+        create_break(high[1], true)
+
+//──────────────── ZONES DRAW ────────────────
+
+if show_zones
+    int len = zone_len
+    if bar_index + 1 < zone_len
+        len := bar_index + 1
+
+    float hi = ta.highest(high, len)
+    float lo = ta.lowest(low, len)
+    float mid = (hi + lo) * 0.5
+
+    int left = bar_index - (len - 1)
+    int right = bar_index
+
+    color premColor = color.new(zone_premium, zone_opacity)
+    color discColor = color.new(zone_discount, zone_opacity)
+
+    if na(premBox)
+        premBox := box.new(left, hi, right, mid, bgcolor=premColor, border_color=premColor)
+    else
+        box.set_left(premBox, left)
+        box.set_right(premBox, right)
+        box.set_top(premBox, hi)
+        box.set_bottom(premBox, mid)
+        box.set_bgcolor(premBox, premColor)
+        box.set_border_color(premBox, premColor)
+
+    if na(discBox)
+        discBox := box.new(left, mid, right, lo, bgcolor=discColor, border_color=discColor)
+    else
+        box.set_left(discBox, left)
+        box.set_right(discBox, right)
+        box.set_top(discBox, mid)
+        box.set_bottom(discBox, lo)
+        box.set_bgcolor(discBox, discColor)
+        box.set_border_color(discBox, discColor)
+else
+    if not na(premBox)
+        box.delete(premBox)
+        premBox := na
+    if not na(discBox)
+        box.delete(discBox)
+        discBox := na
+
+//──────────────── UPDATE LEVELS ────────────────
+
+if array.size(breaks) > 0
+    for i = array.size(breaks) - 1 to 0
+        lvl = array.get(breaks, i)
+
+        // invalidate break
+        if hard_close(lvl.price, lvl.is_break_up)
+            line.delete(lvl.ln)
+            label.delete(lvl.lbl)
+            if not na(lvl.holdLine)
+                line.delete(lvl.holdLine)
+            array.remove(breaks, i)
+            continue
+
+        line.set_x2(lvl.ln, bar_index + 5)
+        label.set_x(lvl.lbl, bar_index + 5)
+
+        // structure reset
+        if (lvl.is_break_up and red and red[1]) or
+           (not lvl.is_break_up and green and green[1])
+            lvl.waitingOpposite := true
+            lvl.waitingRetest := false
+
+        if lvl.waitingOpposite
+            if lvl.is_break_up and green
+                lvl.waitingOpposite := false
+                lvl.waitingRetest := true
+            else if not lvl.is_break_up and red
+                lvl.waitingOpposite := false
+                lvl.waitingRetest := true
+
+        if lvl.waitingRetest and touch(lvl.price, lvl.is_break_up)
+            bool validClose = false
+            if lvl.is_break_up
+                validClose := close > open
+            else
+                validClose := close < open
+
+            if validClose
+                lvl.testCount += 1
+                lvl.waitingRetest := false
+
+        // origin mark
+        if lvl.testCount >= 2 and na(lvl.originBar)
+            lvl.originBar := bar_index
+
+        //──────────────── HOLD RESOLVE ────────────────
+
+        bool originActive = lvl.testCount >= 2 and not na(lvl.originBar)
+
+        if not originActive
+            if not na(lvl.holdLine)
+                line.delete(lvl.holdLine)
+            lvl.holdLine := na
+            lvl.holdValid := false
+            lvl.holdTests := 0
+            lvl.holdPrice := na
+        else
+            int lookback = bar_index - lvl.originBar
+            if lookback < 1
+                lookback := 1
+            int cap = bar_index
+            if cap > max_lookback
+                cap := max_lookback
+            if lookback > cap
+                lookback := cap
+
+            float candOpen = na
+            float candLow  = na
+            float candHigh = na
+            int   candBar  = na
+
+            float holdOpen = na
+            float holdLow  = na
+            float holdHigh = na
+            int   holdBar  = na
+            bool  holdValidState = false
+            bool  holdTestedState = false
+
+            for j = lookback to 1
+                if not na(open[j])
+                    int barIdx = bar_index - j
+
+                    float o = open[j]
+                    float h = high[j]
+                    float l = low[j]
+                    float c = close[j]
+                    bool isBull = c > o
+                    bool isBear = c < o
+
+                    if lvl.is_break_up
+                        if isBull and o < lvl.price
+                            if na(candOpen) or o > candOpen
+                                candOpen := o
+                                candLow := l
+                                candHigh := h
+                                candBar := barIdx
+
+                        if holdValidState
+                            if isBull and o > holdOpen and c > holdOpen
+                                holdValidState := false
+                                holdTestedState := false
+                                holdOpen := na
+                                holdLow := na
+                                holdHigh := na
+                                holdBar := na
+                            else
+                                if h >= holdLow and l <= holdOpen
+                                    holdTestedState := true
+
+                            if not na(candOpen) and isBear and o < candLow and c < candLow
+                                if na(holdOpen) or candOpen > holdOpen
+                                    holdValidState := true
+                                    holdTestedState := false
+                                    holdOpen := candOpen
+                                    holdLow := candLow
+                                    holdHigh := candHigh
+                                    holdBar := candBar
+                        else
+                            if not na(candOpen) and isBear and o < candLow and c < candLow
+                                holdValidState := true
+                                holdTestedState := false
+                                holdOpen := candOpen
+                                holdLow := candLow
+                                holdHigh := candHigh
+                                holdBar := candBar
+                    else
+                        if isBear and o > lvl.price
+                            if na(candOpen) or o < candOpen
+                                candOpen := o
+                                candLow := l
+                                candHigh := h
+                                candBar := barIdx
+
+                        if holdValidState
+                            if isBear and o < holdOpen and c < holdOpen
+                                holdValidState := false
+                                holdTestedState := false
+                                holdOpen := na
+                                holdLow := na
+                                holdHigh := na
+                                holdBar := na
+                            else
+                                if h >= holdOpen and l <= holdHigh
+                                    holdTestedState := true
+
+                            if not na(candOpen) and isBull and o > candHigh and c > candHigh
+                                if na(holdOpen) or candOpen < holdOpen
+                                    holdValidState := true
+                                    holdTestedState := false
+                                    holdOpen := candOpen
+                                    holdLow := candLow
+                                    holdHigh := candHigh
+                                    holdBar := candBar
+                        else
+                            if not na(candOpen) and isBull and o > candHigh and c > candHigh
+                                holdValidState := true
+                                holdTestedState := false
+                                holdOpen := candOpen
+                                holdLow := candLow
+                                holdHigh := candHigh
+                                holdBar := candBar
+
+            if not holdValidState
+                if not na(lvl.holdLine)
+                    line.delete(lvl.holdLine)
+                lvl.holdLine := na
+                lvl.holdValid := false
+                lvl.holdTests := 0
+                lvl.holdPrice := na
+            else
+                lvl.holdValid := true
+                lvl.holdPrice := holdOpen
+                if holdTestedState
+                    lvl.holdTests := 1
+                else
+                    lvl.holdTests := 0
+
+                bool shouldShow = false
+                color holdColor = col_bear_untested
+
+                if lvl.is_break_up
+                    holdColor := holdTestedState ? col_bear_tested : col_bear_untested
+                else
+                    holdColor := holdTestedState ? col_bull_tested : col_bull_untested
+
+                if holdTestedState
+                    shouldShow := show_hold_tested
+                else
+                    shouldShow := show_hold_untested
+
+                if shouldShow
+                    if na(lvl.holdLine)
+                        lvl.holdLine := line.new(holdBar, holdOpen,
+                                                 bar_index + 5, holdOpen,
+                                                 extend=extend.right,
+                                                 width=line_width)
+                    else
+                        line.set_xy1(lvl.holdLine, holdBar, holdOpen)
+                        line.set_xy2(lvl.holdLine, bar_index + 5, holdOpen)
+
+                    line.set_color(lvl.holdLine, holdColor)
+                    if holdTestedState
+                        line.set_style(lvl.holdLine, line.style_dotted)
+                    else
+                        line.set_style(lvl.holdLine, line.style_solid)
+                else
+                    if not na(lvl.holdLine)
+                        line.delete(lvl.holdLine)
+                    lvl.holdLine := na
+
+        // VISUAL LEVEL STATE
+        bool showLevel = false
+        color col = color.white
+
+        if lvl.testCount == 0
+            showLevel := show_breaks
+            col := lvl.is_break_up ? col_bear_untested : col_bull_untested
+            line.set_style(lvl.ln, line.style_dotted)
+            line.set_width(lvl.ln, line_width)
+        else if lvl.testCount == 1
+            showLevel := show_tested
+            col := lvl.is_break_up ? col_bear_tested : col_bull_tested
+            line.set_style(lvl.ln, line.style_dashed)
+            line.set_width(lvl.ln, line_width)
+        else
+            showLevel := show_origin
+            col := lvl.is_break_up ? col_bear_untested : col_bull_untested
+            line.set_style(lvl.ln, line.style_dashed)
+            line.set_width(lvl.ln, line_width)
+
+        if showLevel
+            line.set_color(lvl.ln, col)
+        else
+            line.set_color(lvl.ln, color.new(color.white,100))
+
+        label.set_text(lvl.lbl, str.tostring(lvl.testCount))
+
+        if show_counts and showLevel
+            label.set_color(lvl.lbl, color.black)
+            label.set_textcolor(lvl.lbl, color.white)
+        else
+            label.set_color(lvl.lbl, color.new(color.white,100))
+            label.set_textcolor(lvl.lbl, color.new(color.white,100))
+
+        array.set(breaks, i, lvl)
+
+    //──────────────── SIGNAL OUTPUT FOR STRATEGY ────────────────
+
+// Best candidate levels voor strategy
+float bestLongHold = na
+float bestShortHold = na
+int bestLongOrigin = na
+int bestShortOrigin = na
+
+if array.size(breaks) > 0
+    for i = 0 to array.size(breaks) - 1
+        lvl = array.get(breaks, i)
+
+        bool originActive = lvl.testCount >= 2 and not na(lvl.originBar)
+
+        if lvl.holdValid and lvl.holdTests == 0 and originActive
+            if lvl.is_break_up
+                if lvl.holdPrice > close
+                    if na(bestShortHold) or lvl.holdPrice > bestShortHold
+                        bestShortHold := lvl.holdPrice
+                        bestShortOrigin := lvl.originBar
+            else
+                if lvl.holdPrice < close
+                    if na(bestLongHold) or lvl.holdPrice < bestLongHold
+                        bestLongHold := lvl.holdPrice
+                        bestLongOrigin := lvl.originBar
+
+//──────── STRATEGY DATA OUTPUT ────────
+getLongHold() =>
+    bestLongHold
+
+getShortHold() =>
+    bestShortHold
+
+getLongOrigin() =>
+    bestLongOrigin
+
+getShortOrigin() =>
+    bestShortOrigin

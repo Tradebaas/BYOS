@@ -1,0 +1,37 @@
+{
+    "strategy_id": "DTD-Topstep-Golden",
+    "pipeline": [
+        {
+            "module_type": "ConfirmationHoldLevelTrigger",
+            "params": {
+                "bias_window_size": 200
+            }
+        },
+        {
+            "module_type": "KillzoneFilter",
+            "params": {
+                "start_hour": 0,
+                "start_minute": 0,
+                "end_hour": 23,
+                "end_minute": 59,
+                "timezone": "America/New_York"
+            }
+        },
+        {
+            "module_type": "TTLTimeout",
+            "params": {
+                "max_candles_open": 30
+            }
+        },
+        {
+            "module_type": "RATLimitOrder",
+            "params": {
+                "tick_size": 0.25,
+                "entry_frontrun_ticks": 4,
+                "stop_loss_padding_ticks": 0,
+                "absolute_sl_points": 10.0,
+                "absolute_tp_points": 20.0
+            }
+        }
+    ]
+}

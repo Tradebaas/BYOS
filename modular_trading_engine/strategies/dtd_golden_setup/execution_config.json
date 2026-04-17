@@ -1,0 +1,31 @@
+{
+  "accounts": [
+    {
+      "account_id": 21645118,
+      "account_name": "50KTC-V2-207303-98404983",
+      "symbol": "NQ",
+      "order_size": 1,
+      "is_active": false,
+      "max_positions": 1,
+      "strategies": [
+        "DTD-Topstep-Golden"
+      ]
+    },
+    {
+      "account_id": 3961374,
+      "account_name": "100KTC-V2-207303-14439249",
+      "symbol": "NQ",
+      "order_size": 1,
+      "is_active": true,
+      "max_positions": 1,
+      "strategies": [
+        "DTD-Topstep-Golden"
+      ]
+    }
+  ],
+  "global_settings": {
+    "dry_run_mode": false,
+    "poll_interval_sec": 10,
+    "wakeup_resync_enabled": true
+  }
+}

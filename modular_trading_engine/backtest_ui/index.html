@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tradebazen SaaS Platform</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="app">
+        
+        <!-- ================= VIEW 1: LOGIN ================= -->
+        <section id="view-login" class="view active">
+            <div class="login-container">
+                <div class="brand">
+                    <i data-lucide="activity" class="brand-icon"></i>
+                    <h1>TRADEBAZEN</h1>
+                    <p>Quantitative Engine</p>
+                </div>
+                <div class="glass-card login-card">
+                    <h2>Sign In</h2>
+                    <div class="form-group">
+                        <label>Workspace Email</label>
+                        <div class="input-with-icon">
+                            <i data-lucide="user"></i>
+                            <input type="email" placeholder="admin@tradebazen.com" value="admin@tradebazen.com">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <div class="input-with-icon">
+                            <i data-lucide="lock"></i>
+                            <input type="password" placeholder="•••••••••" value="password123">
+                        </div>
+                    </div>
+                    <button id="btn-login" class="btn btn-primary full-width">Enter Workspace <i data-lucide="arrow-right"></i></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= VIEW 2: STRATEGY STUDIO ================= -->
+        <section id="view-config" class="view">
+            <header class="saas-header">
+                <div class="brand-small">
+                    <i data-lucide="activity"></i>
+                    <span>TRADEBAZEN STUDIO</span>
+                </div>
+                <div class="user-profile">
+                    <button id="theme-toggle" style="background:transparent;border:none;color:inherit;cursor:pointer;display:flex;align-items:center;opacity:0.7;margin-right:8px;"><i data-lucide="sun" id="theme-icon"></i></button>
+                    <i data-lucide="user-circle"></i>
+                    <span>Admin</span>
+                </div>
+            </header>
+
+            <main class="studio-layout">
+                <div class="config-pane">
+                    
+                    <div class="config-section glass-card">
+                        <h3><i data-lucide="database"></i> Data Environment</h3>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Instrument <span class="info-wrapper" data-tooltip="De onderliggende asset. Alleen NQ is momenteel beschikbaar qua actuele data tapes."><i data-lucide="info"></i></span></label>
+                                <select id="param-instrument"><option value="NQ">Nasdaq 100 (NQ)</option></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Playbook <span class="info-wrapper" data-tooltip="Kies een vooraf geconfigureerde strategie. Deze vult direct alle parameters hieronder in met die JSON data."><i data-lucide="info"></i></span></label>
+                                <select id="param-playbook"><option value="">Custom Build</option></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Start Date <span class="info-wrapper" data-tooltip="Optionele begindatum voor de backtest. Laat leeg om vanaf de oudste beschikbare candle te beginnen."><i data-lucide="info"></i></span></label>
+                                <input type="date" id="param-start">
+                            </div>
+                            <div class="form-group">
+                                <label>End Date <span class="info-wrapper" data-tooltip="Optionele einddatum. Laat leeg om tot de meest recente data (vaak gisteren) door te rekenen."><i data-lucide="info"></i></span></label>
+                                <input type="date" id="param-end">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="config-section glass-card">
+                        <h3><i data-lucide="sliders-horizontal"></i> Execution Parameters</h3>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Stop Loss (Points) <span class="info-wrapper" data-tooltip="Absolute SL in points. Exits strictly on this distance."><i data-lucide="info"></i></span></label>
+                                <input type="number" id="input-sl" class="sync-input" value="10.0" step="0.25" min="2" max="100">
+                            </div>
+                            <input type="range" id="slider-sl" class="custom-slider" min="2" max="100" step="0.25" value="10.0">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Take Profit (Points) <span class="info-wrapper" data-tooltip="Take profit limit order distance."><i data-lucide="info"></i></span></label>
+                                <input type="number" id="input-tp" class="sync-input" value="20.0" step="0.25" min="2" max="250">
+                            </div>
+                            <input type="range" id="slider-tp" class="custom-slider" min="2" max="250" step="0.25" value="20.0">
+                        </div>
+                        
+                        <div class="grid-2 multi-slider-row">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Bias Window <span class="info-wrapper" data-tooltip="Candles analyzed for trend confirmation."><i data-lucide="info"></i></span></label>
+                                    <input type="number" id="input-bias" class="sync-input" value="200" step="10" min="50" max="600">
+                                </div>
+                                <input type="range" id="slider-bias" class="custom-slider" min="50" max="600" step="10" value="200">
+                            </div>
+
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Time-To-Live <span class="info-wrapper" data-tooltip="Candles before an unfilled limit entry is cancelled."><i data-lucide="info"></i></span></label>
+                                    <input type="number" id="input-ttl" class="sync-input" value="30" step="1" min="1" max="120">
+                                </div>
+                                <input type="range" id="slider-ttl" class="custom-slider" min="1" max="120" step="1" value="30">
+                            </div>
+                        </div>
+
+                        <div class="grid-3 multi-slider-row mt-3">
+                             <!-- Ticks specific -->
+                            <div class="form-group">
+                                <label>Tick Size <span class="info-wrapper" data-tooltip="De minimale prijsstap van het instrument. Voor NQ is dit altijd 0.25. Mocht je es/mes handelen, staat deze op 0.25 of respectievelijk anders."><i data-lucide="info"></i></span></label>
+                                <input type="number" id="input-tick" class="sync-input" value="0.25" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label>Frontrun Ticks <span class="info-wrapper" data-tooltip="Stel dit in op bijv. 1 of 2 om je limit order net 'voor' het theorie-level te plaatsen (omdat je er anders vaak net niet wordt ingeprikt)."><i data-lucide="info"></i></span></label>
+                                <input type="number" id="input-frontrun" class="sync-input" value="0" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label>SL Pad Ticks <span class="info-wrapper" data-tooltip="Extra 'ademruimte' in Ticks bovenop de stop_loss (buffer marge achter de markt-structuur of SR zone)."><i data-lucide="info"></i></span></label>
+                                <input type="number" id="input-slpad" class="sync-input" value="0" step="1">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="config-section glass-card">
+                        <h3><i data-lucide="clock"></i> Daily Operability (Killzones)</h3>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>KZ Block Start <span class="info-wrapper" data-tooltip="Starttijd (EST) van de 'Killzone'. Binnen dit tijdslot opent de bot bewust géén nieuwe trades wegens onvoorspelbare markt-open volatiliteit."><i data-lucide="info"></i></span></label>
+                                <input type="time" id="param-kz-start" value="09:20">
+                            </div>
+                            <div class="form-group">
+                                <label>KZ Block End <span class="info-wrapper" data-tooltip="Eindtijd (EST) van de Killzone. Zodra deze tijd passeert is de markt gestabiliseerd en mag de engine weer setups vuren."><i data-lucide="info"></i></span></label>
+                                <input type="time" id="param-kz-end" value="09:40">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fixed to TF=1 for now as per current limitation -->
+                    <input type="hidden" id="param-tf" value="1">
+                    
+                </div>
+                
+                <div class="action-pane">
+                    <div class="glass-card call-to-action">
+                        <h2>Deploy Simulation</h2>
+                        <p>Dispatch parameters to the Quantitative Engine. Historical matching will be executed locally.</p>
+                        <button id="btn-simulate" class="btn btn-deploy"><i data-lucide="play-circle"></i> RUN BACKTEST</button>
+                        <div class="loading-bar disabled" id="loading-bar"></div>
+                    </div>
+                </div>
+
+            </main>
+        </section>
+
+        <!-- ================= VIEW 3: TERMINAL (RESULTS) ================= -->
+        <section id="view-terminal" class="view">
+            <header class="saas-header">
+                <div class="brand-small">
+                    <button id="btn-back" class="btn-ghost"><i data-lucide="chevron-left"></i> Modulate Config</button>
+                </div>
+                <div class="terminal-status">
+                    <span class="pulse-dot"></span> CONNECTION ESTABLISHED
+                </div>
+            </header>
+
+            <main class="terminal-layout">
+                <!-- Executable Logger -->
+                <div class="terminal-container glass-card">
+                    <div class="terminal-header">
+                        <h2><i data-lucide="list"></i> EXECUTION LOG (LAST 50 TRADES)</h2>
+                    </div>
+                    <div class="trades-list-wrapper">
+                        <table id="trades-table">
+                            <thead>
+                                <tr>
+                                    <th>TIME (UTC)</th>
+                                    <th>DIR</th>
+                                    <th>ENTRY</th>
+                                    <th>MFE / MAE</th>
+                                    <th>PNL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-body">
+                                <tr><td colspan="5" style="text-align: center; padding: 2rem; opacity: 0.5;">Awaiting datastream payload...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Stats Grid (Sidebar in Terminal) -->
+                <div class="stats-sidebar">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon"><i data-lucide="target"></i></div>
+                        <div class="stat-body">
+                            <h3>WIN RATE</h3>
+                            <div class="stat-value digital" id="stat-winrate">--%</div>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon"><i data-lucide="dollar-sign"></i></div>
+                        <div class="stat-body">
+                            <h3>TOTAL PN/L</h3>
+                            <div class="stat-value digital highlight" id="stat-pnl">--</div>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon"><i data-lucide="trending-down"></i></div>
+                        <div class="stat-body">
+                            <h3>MAX DRAWDOWN</h3>
+                            <div class="stat-value digital danger" id="stat-dd">--</div>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon"><i data-lucide="hash"></i></div>
+                        <div class="stat-body">
+                            <h3>TRADES</h3>
+                            <div class="stat-value digital" id="stat-count">--</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </section>
+        
+    </div>
+
+    <script>
+        lucide.createIcons();
+    </script>
+    <script src="app.js"></script>
+</body>
+</html>

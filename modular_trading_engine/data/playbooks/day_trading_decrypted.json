@@ -41,7 +41,7 @@
             "module_type": "RATLimitOrder",
             "params": {
                 "tick_size": 0.25,
-                "entry_frontrun_ticks": 0,
+                "entry_frontrun_ticks": 4,
                 "stop_loss_padding_ticks": 0,
                 "absolute_sl_points": 10.0,
                 "absolute_tp_points": 20.0

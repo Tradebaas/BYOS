@@ -87,28 +87,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     
         return blocks
 
-    def process(self, context: PipelineContext) -> None:
-        if context.active_polarity_is_bullish is None:
-            return
-            
-        history = context.theory_state.history
-        if not history:
-            return
-            
-        is_bullish = context.active_polarity_is_bullish
-        
-        # 1. 200 Candle Logic memory enforcement
-        bias_window_size = self.params.get('bias_window_size', 200)
-        current_idx = len(history) - 1
-        start_idx = max(0, current_idx - bias_window_size)
-        
-        # 2. Extract completely independent micro-structural blocks
-        blocks = self.find_blocks(history, start_idx, is_bullish)
-        if not blocks:
-            return
-            
-        # 3. Sweep & Confirm State Machine
-        # We process blocks forward in time to simulate market evolution logic
+
     def simulate_trade_lock(self, history: List[Any], start_idx: int, entry: float, sl: float, tp: float, is_bullish: bool, ttl_candles: int = 30) -> int:
         """
         Simulates the lifecycle of a limit order directly inside the 200-candle memory.
