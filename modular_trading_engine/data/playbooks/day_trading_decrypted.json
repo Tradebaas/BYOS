@@ -21,6 +21,12 @@
                         "start_minute": 20,
                         "end_hour": 9,
                         "end_minute": 40
+                    },
+                    {
+                        "start_hour": 15,
+                        "start_minute": 55,
+                        "end_hour": 16,
+                        "end_minute": 30
                     }
                 ]
             }

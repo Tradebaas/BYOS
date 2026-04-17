@@ -259,23 +259,56 @@ class TopstepClient:
             logger.error(f"Failed to place order: {e}")
             return TopstepOrderResponse(success=False, error_message=str(e))
 
+    def cancel_order(self, order_id: int) -> bool:
+        """
+        Cancels a specific order by ID.
+        """
+        payload = {
+            "accountId": self.credentials.account_id,
+            "orderId": order_id
+        }
+        try:
+            response = self._session.post(f"{self.BASE_URL}/Order/cancel", json=payload)
+            return response.ok
+        except Exception as e:
+            logger.error(f"Failed to cancel order {order_id}: {e}")
+            return False
+
     def cancel_all_orders(self, base_symbol: str = "NQ") -> bool:
         """
         Annuleert alle pending (working) entry orders op dit account/target om state schoon te vegen.
+        Omdat Topstep/ProjectX geen bulk-cancel heeft, itereren we over actieve orders.
         """
         contract_id = self._get_active_contract(base_symbol)
         if not contract_id:
             return False
             
-        payload = {
-            "accountId": self.credentials.account_id,
-            "contractId": contract_id
-        }
         try:
-            response = self._session.post(f"{self.BASE_URL}/Order/cancelAll", json=payload)
-            return response.ok
+            # Fetch explicitly to ensure we have the live order book
+            response = self._session.get(f"https://userapi.topstepx.com/Order?accountId={self.credentials.account_id}")
+            if not response.ok:
+                logger.error("CancelAll failed to fetch current live orders.")
+                return False
+                
+            orders = response.json()
+            if not isinstance(orders, list):
+                return False
+                
+            success_overall = True
+            for o in orders:
+                if o.get("status") in [1, "Working", "Pending"]:
+                    # Only cancel orders matching the specific contract we requested
+                    if str(o.get("contractId")) == str(contract_id):
+                        o_id = o.get("id") or o.get("orderId")
+                        if o_id:
+                            logger.info(f"Issuing Cancel instruction for OrderID {o_id}...")
+                            res = self.cancel_order(o_id)
+                            if not res:
+                                success_overall = False
+            return success_overall
+            
         except Exception as e:
-            logger.error(f"Failed to CancelAll: {e}")
+            logger.error(f"Failed in CancelAll wrapper: {e}")
             return False
 
     def flatten_position(self, base_symbol: str = "NQ") -> bool:

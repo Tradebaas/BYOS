@@ -162,10 +162,8 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
         if not blocks:
             return
             
-        # 3. Sweep & Confirm State Machine with Trade Locking
-        active_block_1 = None
-        test_idx = -1
-        active_block_2 = None
+        # 3. Sweep & Confirm State Machine with Trade Locking (Multi-Anchor Stack)
+        active_anchors = []
         locked_until_idx = -1
         
         # We only care about the latest valid setup we can find natively, 
@@ -173,81 +171,64 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
         latest_valid_setup = None
         
         for b in blocks:
-            if not active_block_1:
-                active_block_1 = b
-                continue
-                
-            b1_hc = active_block_1['hc_idx']
-            curr_c1 = b['c1_idx']
+            b['last_checked_idx'] = b['hc_idx'] # Initialize the anchor's pointer
+            surviving_anchors = []
+            confirmed_setups = []
             
-            validation_ready = False
-            
-            if active_block_1 and test_idx == -1:
+            for anchor in active_anchors:
                 was_invalidated = False
                 found_test = -1
                 
-                for k in range(b1_hc + 1, curr_c1 + 1):
+                # Check the gap between this anchor's last checked index and the new block's C1
+                for k in range(anchor['last_checked_idx'] + 1, b['c1_idx'] + 1):
                     ck = history[k]
                     if not is_bullish:
-
                         # HARD CLOSE INVALIDATION: Green candle closing above Hold Level
-                        if ck.is_bullish and ck.open > active_block_1['hold'] and ck.close > active_block_1['hold']:
+                        if ck.is_bullish and ck.open > anchor['hold'] and ck.close > anchor['hold']:
                             was_invalidated = True
                             break
                         # The test can ONLY happen after the previous trade lock expires
-                        if ck.high >= active_block_1['hold'] and k > locked_until_idx:
+                        if ck.high >= anchor['hold'] and k > locked_until_idx:
                             found_test = k
                     else:
-
                         # HARD CLOSE INVALIDATION: Red candle closing below Hold Level
-                        if ck.is_bearish and ck.open < active_block_1['hold'] and ck.close < active_block_1['hold']:
+                        if ck.is_bearish and ck.open < anchor['hold'] and ck.close < anchor['hold']:
                             was_invalidated = True
                             break
-                        if ck.low <= active_block_1['hold'] and k > locked_until_idx:
+                        if ck.low <= anchor['hold'] and k > locked_until_idx:
                             found_test = k
                             
                 if was_invalidated:
-                    active_block_1 = b
-                    continue
+                    continue # Anchor dies (hard close)
                     
                 if found_test != -1:
-                    test_idx = found_test
-                    active_block_2 = b 
-                    validation_ready = True
+                    # Anchor was tested! This block 'b' confirms the setup.
+                    confirmed_setups.append({
+                        'anchor': anchor,
+                        'b2': b
+                    })
                 else:
-                    active_block_1 = b
+                    # Anchor survives but remains untested. Update pointer.
+                    anchor['last_checked_idx'] = b['c1_idx']
+                    surviving_anchors.append(anchor)
                     
-            elif active_block_1 and test_idx != -1:
-                was_invalidated = False
-                for k in range(active_block_2['hc_idx'] + 1, b['c1_idx'] + 1):
-                    ck = history[k]
-                    if not is_bullish:
-
-                        if ck.is_bullish and ck.open > active_block_1['hold'] and ck.close > active_block_1['hold']:
-                            was_invalidated = True
-                            break
-                    else:
-
-                        if ck.is_bearish and ck.open < active_block_1['hold'] and ck.close < active_block_1['hold']:
-                            was_invalidated = True
-                            break
-                if was_invalidated:
-                    active_block_1 = b
-                    test_idx = -1
-                    active_block_2 = None
-                    continue
-                    
-                active_block_2 = b 
-                validation_ready = True
-                
+            trade_generated = False
+            
             # Check if this valid confirmation yields a trade!
-            if validation_ready:
-                hc2 = active_block_2['hc_idx']
+            if confirmed_setups:
+                # Pick the setup with the most optimal anchor (closest to extreme)
+                if is_bullish:
+                    best_setup = min(confirmed_setups, key=lambda s: s['anchor']['hold'])
+                else:
+                    best_setup = max(confirmed_setups, key=lambda s: s['anchor']['hold'])
+                    
+                b2 = best_setup['b2']
+                hc2 = b2['hc_idx']
+                
                 if hc2 > locked_until_idx:
-                    entry = active_block_2['hold']
+                    entry = b2['hold']
                     
                     # PREMIUM/DISCOUNT FILTER
-                    # Calculate 200-candle range ending strictly at the Validation Hard Close
                     eval_start_idx = max(0, hc2 - bias_window_size)
                     eval_candles = history[eval_start_idx:hc2+1]
                     range_high = max(ck.high for ck in eval_candles)
@@ -279,13 +260,17 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                         locked_until_idx = self.simulate_trade_lock(history, hc2 + 1, entry, sl, tp, is_bullish, ttl_candles)
                         
                         # Store as our latest candidate, carrying over the modified frontrun entry
-                        active_block_2['frontrun_entry'] = entry
-                        latest_valid_setup = active_block_2
-                    
-                    # RESET completely: wait for NEXT Trap/Test
-                    active_block_1 = None
-                    active_block_2 = None
-                    test_idx = -1
+                        b2['frontrun_entry'] = entry
+                        latest_valid_setup = b2
+                        trade_generated = True
+
+            if trade_generated:
+                # RESET completely: wait for NEXT Trap/Test
+                active_anchors = []
+            else:
+                # Add this new block natively as a floating anchor for the future
+                surviving_anchors.append(b)
+                active_anchors = surviving_anchors
 
         # 4. We only process the final state if it is currently locked into the live edge
         if latest_valid_setup:
