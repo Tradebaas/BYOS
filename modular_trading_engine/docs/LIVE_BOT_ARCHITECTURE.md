@@ -9,7 +9,7 @@ Dit document dient als referentie over hoe de Python architectuur realtime markt
 *De fysieke connectie met de TopstepX backend en tijd-synchronisatie.*
 
 1. **`src/layer4_execution/live_fleet_commander.py`**
-   * **Rol: De Kapitein.** Het absolute hoofdkwartier. Opgestart via de terminal (bijv. `... live_fleet_commander.py --strategy dtd_golden_setup`). Het script laadt eerst historische data uit CSV's in om theorie-structuren te ontdekken ('Warming up'), waarna hij naadloos overvloeit in zijn "Live Loop". Elke 10 seconden leest hij theorie, berekent signalen via Layer 3 en plaatst/verplaatst fysieke orders.
+   * **Rol: De Kapitein.** Het absolute hoofdkwartier. Opgestart via de terminal (bijv. `... live_fleet_commander.py --strategy <naam_van_strategie_map>`). Het script laadt eerst historische data uit CSV's in om theorie-structuren te ontdekken ('Warming up'), waarna hij naadloos overvloeit in zijn "Live Loop". Elke 10 seconden leest hij theorie, berekent signalen via Layer 3 en plaatst/verplaatst fysieke orders.
 2. **`src/layer4_execution/topstep_client.py` & `auth.py`**
    * **Rol: De Brug / De Tolk.** Vertaalt Python commando's (Intents) naar cryptische ProjectX REST API payloads.
    * Lost automatische contract-rollovers op (leest op de achtergrond het meest courante symbol uit `/NQ`).
@@ -23,7 +23,7 @@ Dit document dient als referentie over hoe de Python architectuur realtime markt
 3. **`strategies/<strategy_naam>/strategy_playbook.json`**
    * **Rol: Het Receptenboek.** De kern van een modulaire container. Bevat geen code, maar bepaalt letterlijk welke Layer-3 modules, in welke volgorde, met welke specificaties (aantal ticks SL, frontruns, etc.) geactiveerd worden.
 4. **`strategies/<strategy_naam>/execution_config.json`**
-   * **Rol: Account Mapping.** Bepaalt op exact welk live account-ID op TopstepX (bijv. de 50K account) de gedefinieerde playbooks mogen vuren.
+   * **Rol: Account Mapping.** Bepaalt op exact welk live account-ID op je broker of prop-firm (bijv. account nummer XYZ) de gedefinieerde playbooks mogen vuren.
 5. **`src/layer3_strategy/rule_engine.py`**
    * **Rol: De Transportband.** Het mechanisme dat de bovengenoemde JSON "Containers" pakt, ze inleest in de dynamische Python parser en ze in een sequentiële Pipeline giet ter evaluatie.
 6. **`src/layer3_strategy/modules/`** *(Alle losse sub-calculatie blokken)*

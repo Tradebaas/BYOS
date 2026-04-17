@@ -8,7 +8,7 @@ An institutional-grade, 100% modular, objective, and relentlessly scalable autom
 2. **Generic & Modular (Lego Blocks):** Pure mathematical theory modules (Layer 2) connect to execution via clean JSON/YAML playbooks (Layer 3).
 3. **Mathematical Objectivity:** Strict binary evaluation (True/False). No vague criteria.
 4. **No Tech Debt:** Functions are small, specific, and explicitly typed to prevent god-classes.
-5. **No Terminological Pollution:** Only predefined CCTA vocabulary (e.g., Hold Levels, Hard Close, Pandora's Box) is permitted. No external retail trading terms.
+5. **No Terminological Pollution:** Only predefined CCTA vocabulary (e.g., Hold Levels, Hard Close, Origins) is permitted. No external retail trading terms.
 
 ## High-Level Architecture
 
@@ -30,10 +30,10 @@ The system operates strictly across four distinct layers communicating via inter
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| **Python Ecosystem** | Native suitability for MLX scaling, FastAPI async capabilities natively supporting Websockets. | Decided |
+| **Python Ecosystem** | Native suitability for mathematical evaluation and strict Terminal-First CLI executions. | Decided |
 | **GSD Orchestration** | Ensures relentless adherence to layer separation without AI hallucinatory drift. | Decided |
-| **JSON Strategy Playbooks** | Allows GUI-based strategy building in the future without touching Python Core execution code. | Decided |
+| **JSON Strategy Playbooks** | Containerizes strategy parameters perfectly safely without touching Python Core execution code. | Decided |
 | **Event Logging** | Full OHLCV recording on state-transitions mapped securely to post-trade MFE/MAE measurement. | Pending |
 
 ---
-*Last updated: April 2026 after initialization*
+*Last updated: April 2026 after Production Hardening*

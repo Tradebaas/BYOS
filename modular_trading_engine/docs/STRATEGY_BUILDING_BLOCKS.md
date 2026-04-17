@@ -35,7 +35,7 @@ L2 modules zijn passieve markeringen. Ze genereren géén orders, maar geven de 
 L3 modules zijn de actieve filters. Zij nemen het gekleurde `MarketState` object van L2 over en beslissen op basis van jouw JSON file of er een trigger en uitvoering plaatsvindt.
 
 ### `ConfirmationHoldLevel_Trigger`
-Dit is de kloppende hartklep van de DTD_Golden_Setup. 
+Dit is de kloppende hartklep van je Limit-Order detectie. 
 * **Input Parameters (Playbook):**
   * `bias_filter`: Vereist dit strict Premium/Discount concordantie? (True/False)
   * `min_volume`: Trackt orderbook momentum.

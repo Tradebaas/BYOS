@@ -21,7 +21,7 @@ Het grote voordeel van deze architectuur is dat Layer 2 & 3 (Theorie & Strategie
 
 * **`scripts/run_backtest.py`**
    * **Rol: De Tijdreiziger.** Hier gebeurt de absolute simulatie-magie. In plaats van de live kapitein (`live_fleet_commander.py`), draait deze simulator in "Fast Forward". 
-   * **Hoe het werkt:** Via de CLI (terminal) start je dit script op en wijst een strategie aan (`--strategy dtd_golden_setup`). De engine injecteert exact hetzelfde JSON playbook als de Live Bot. Als de theorie in Layer 3 roept: "Order!", checkt de simulator vliegensvlug in de CSV of je bracket is geraakt. Slippage en fees kunnen direct door de simulatie-logica wiskundig berekend worden.
+   * **Hoe het werkt:** Via de CLI (terminal) start je dit script op en wijst een strategie aan (`--strategy <naam_van_strategie_map>`). De engine injecteert exact hetzelfde JSON playbook als de Live Bot. Als de theorie in Layer 3 roept: "Order!", checkt de simulator vliegensvlug in de CSV of je bracket is geraakt. Slippage en fees kunnen direct door de simulatie-logica wiskundig berekend worden.
 
 ## 📊 3. Exporteren & Validatie
 In de afwezigheid van flash dashboards, rapporteert `run_backtest.py` harde, betrouwbare `metrics` via JSON/CSV dumps of terminal-prints terug naar jou: Total Profit, Win-Rates, Consecutieve drawdowns en exact getimede executie-logs per seconde.
