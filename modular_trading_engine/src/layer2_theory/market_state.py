@@ -1,18 +1,13 @@
 from typing import List
 from src.layer1_data.models import Candle
 from src.layer2_theory.models import TheoryLevel, LevelType
-from src.layer2_theory.trend_tracker import RangeTrendTracker, TrendLineTracker
 from src.layer2_theory.origin_state_machine import OriginTracker
-from src.layer2_theory.deep_dive_tracker import detect_deep_dive
-from src.layer2_theory.pandoras_box_tracker import ScopeBoxTracker
-from src.layer2_theory.polarity_tracker import PolarityTracker
 
 class MarketTheoryState:
     """
     The Global Theory Board (Layer 2 Orchestrator).
     Accepts raw L1 Candles, detects base structures (Hold/Break) using a rolling buffer,
-    spawns secondary trackers automatically, and bubbles them through all active trackers.
-    Maintains a stateless, queryable unified L2 representation for Layer 3.
+    spawns origin trackers automatically, and maintains history.
     """
     def __init__(self):
         # Full history for retroactive dynamic searches
@@ -22,7 +17,6 @@ class MarketTheoryState:
         self.candle_buffer: List[Candle] = []
         
         # Active trackers
-        self.range_trend_trackers: List[RangeTrendTracker] = []
         self.origin_trackers: List[OriginTracker] = []
         
         # State tracking for all levels
@@ -121,18 +115,12 @@ class MarketTheoryState:
             # When a new valid Break Level is established, track Origin escalations
             if level.level_type == LevelType.BREAK_LEVEL:
                 self.origin_trackers.append(OriginTracker(initial_level=level))
-            elif level.level_type == LevelType.HOLD_LEVEL:
-                self.range_trend_trackers.append(RangeTrendTracker(initial_level=level))
                 
         # 3. Escalation & Tracking for existing trackers
-        for tracker in self.range_trend_trackers:
-            tracker.process_candle(candle)
-            
         for tracker in self.origin_trackers:
             tracker.process_candle(candle)
             
         # 4. Cleanup Memory (Remove dead trackers driven to invalidation by Hard Close)
-        self.range_trend_trackers = [t for t in self.range_trend_trackers if t.is_active]
         self.origin_trackers = [t for t in self.origin_trackers if t.is_active]
         
     def get_active_origin_levels(self) -> List[TheoryLevel]:
