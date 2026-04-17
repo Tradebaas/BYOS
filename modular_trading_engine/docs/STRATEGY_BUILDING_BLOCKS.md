@@ -17,68 +17,39 @@ De architectuur kent 4 primaire lagen, waarvan Lagen 2 en 3 volledig modulair zi
 ---
 
 ## 2. Layer 2: Theory Modules
-L2 modules zijn passieve markeringen. Ze genereren géén orders, maar geven de markt mathematisch 'kleur'.
+L2 modules zijn passieve markeringen. Ze genereren géén orders, maar geven de markt mathematisch 'kleur' op basis van pure data.
 
-### `TrackPremiumDiscount`
-* **Werking:** Bepaalt continu het dynamische "Midden" (50% eq) van de huidige marktfase, gebaseerd op een tijds-venster (bijv. de sessie-top en bodem).
-* **Techniek:** Berekent het hoogste en laagste punt over een specifieke terugkijk-range (bijvoorbeeld `{"lookback_minutes": 200}`). Filtert de waarden daarvan en creëert de logische gebieden:
-  * Prijs > 50%: **Premium** Zone (Hier mogen we alléén Shorten)
-  * Prijs < 50%: **Discount** Zone (Hier mogen we alléén Longen)
+### `Hold Level & Break Level Detectoren` (via `MarketTheoryState`)
+* **Werking:** Analyseert continu de binnenkomende 1-minuut market flow om theorie fundering the leggen.
+* **Techniek:** 
+  * **Hold Levels:** Slaat wiskundige candidates (bijv. top/bottom wicks) op en valideert deze uitsluitend als er een Hard Close aan de andere kant plaatsvindt. 
+  * **Break Levels:** Tracked sequentie patronen (bijv. Groen, Rood, Rood) om zuivere breaks the diagnosticeren.
 
-### `TrackOriginPools`
-* **Werking:** Identificeert specifieke 'Fair Value Gaps' of 'Order Blocks' in de markt en catalogiseert deze als `Origins`.
-* **Techniek:** Neemt de laatste x-kaarsjes per tick om onbalans te speuren. Slaat de pool op in de locale geheugen array (`state.active_origins`). Zodra prijs deze later aanraakt, heet dit een `mitigation`. 
+### `OriginStateMachine`
+* **Werking:** Neemt de ruwe Break Levels en Hold Levels en begeleidt ze door hun theorie levenscyclus. Promoveert lijnen tot Origins of Reverse Levels via validatietesten.
+* **Techniek:** Gebruikt geïsoleerde trackers (State Machines) per lijn. Spot "Deep Dives" (penetratie, maar geen gesloten constructie) en ruimt lijnen hardhandig uit het systeem zodra ze "Hard Closed" worden door theorie invalidatie.
 
 ---
 
 ## 3. Layer 3: Strategy Modules
-L3 modules zijn de actieve filters. Zij nemen het gekleurde `MarketState` object van L2 over en beslissen op basis van jouw JSON file of er een trigger en uitvoering plaatsvindt.
+L3 modules zijn de actieve filters. Zij nemen het gekleurde theoriegeheugen over en beslissen op basis van jouw JSON playbook of er een trigger en uitvoering plaatsvindt.
 
-### `ConfirmationHoldLevel_Trigger`
-Dit is de kloppende hartklep van je Limit-Order detectie. 
-* **Input Parameters (Playbook):**
-  * `bias_filter`: Vereist dit strict Premium/Discount concordantie? (True/False)
-  * `min_volume`: Trackt orderbook momentum.
-  * `entry_frontrun_ticks`: De unieke frontrun op het _Target Hold Level_.
-* **Algoritme Executie-Flow:**
-  1. Module scant of er recent (bijv. binnen huidige minuut) een verse candle gesloten is vóór de `OriginPool`.
-  2. Indien de sluiting exact in de correcte Premium/Discount kwadrant zit, bepalen we het exacte wiskundige Level dat we willen verdedigen.
-  3. **Belangrijkste Berekening:** Er is géén hardcoded wiskunde binnen deze module. Hij respecteert 100% de frontrun offset die jij via je JSON mee geeft.
+### `ConfirmationHoldLevelTrigger`
+Dit is de kloppende hartklep van je Setup-Detectie. Het is een 1-minuut Sweep & Confirm scanner.
+* **Flow:**  Zoekt over een bias_window (bijv 200 candles) eerst naar een Anchor-Block (Trap), wacht tot prijs die Anchor test, en bevestigt vervolgens het ontstaan van een _nieuw_ Block in die test!
+* **Bias Filter:** Controleert dynamisch of deze Setup netjes in Premium of Discount ligt op basis van zijn eigen venster.
+* **Output:** Bij een harde sweep & confirm spuugt hij de wiskundige target uit naar de rest van de pipeline.
 
-```json
-// Voorbeeld uit strategy_playbook.json
-"pipeline": [
-  {
-    "module_type": "ConfirmationHoldLevelTrigger",
-    "params": {
-      "bias_window_size": 200
-    }
-  }
-]
-```
-_In bovenstaand voorbeeld filtert de module uitsluitend trades die goed de huidige sessie-bias vallen._
+### `KillzoneFilter`
+* **Functie:** Tijdslot-filter. Bepaalt of de tijd van de dag wel is toegestaan om the handelen (bijv. in `America/New_York` timezone). Buiten deze zone sneuvelt iedere opgebouwde theorie direct on the spot.
 
+### `TTLTimeout`
+* **Functie:** Tijdslimiet beveiliging (Time To Live). Als een setup tracker overleeft maar na `max_candles_open` (bijv 30 minuten) nóg steeds niet bij z'n target is, wist deze module hem genadeloos uit the pijplijn en triggert hij op de achtergrond orders-cancellations.
 
-### `RATLimitOrder_Execution`
-Dit is de kluiswachter die het risico afdicht zodra de L3 Trigger groen licht geeft.
-* **Functie:** Berekent harde brackets om de `Intent` in te kapselen voor L4.
-* **Stop Loss (SL):** Neemt het frontrun entry level als absolute basis, pakt de wiskundige target (bijv. 10 punten absoluut via `absolute_sl_points`), en reserveert het `sl_price` veld. Deze logica is gebouwd met een _absoluut-waarde safeguard_, waardoor de Topstep bracket-offset nooit per ongeluk geïnverteerd bij de API aankomt.
-* **Take Profit (TP):** Hetzelfde mechanisme voor return targets (RR).
-
-```json
-// Voorbeeld uit strategy_playbook.json
-"pipeline": [
-  {
-    "module_type": "RATLimitOrder",
-    "params": {
-      "tick_size": 0.25,
-      "entry_frontrun_ticks": 4,
-      "absolute_sl_points": 10.0,
-      "absolute_tp_points": 20.0
-    }
-  }
-]
-```
+### `RATLimitOrder` (Rejection As Target Execution)
+Dit is de kluiswachter die het risico afdicht zodra álle voorgaande modules groen licht geven, om in te sluiten voor L4.
+* **Functie:** Converteert abstracte niveaus naar harde Topstep intenties o.b.v ticks en parameters in je JSON playbook.
+* **Techniek:** Past `entry_frontrun_ticks` toe, en rekent  `absolute_sl_points` en `absolute_tp_points` exact om. Deze logica the gelaagd over het wiskundige level en wekt het `Intent` object op dat the L4 Motor aanvuurt.
 
 ---
 
