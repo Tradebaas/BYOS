@@ -104,14 +104,14 @@ if __name__ == '__main__':
         help='Path to the historical CSV file'
     )
     parser.add_argument(
-        '--playbook', 
+        '--strategy', 
         type=str, 
-        default='data/playbooks/day_trading_decrypted.json',
-        help='Path to the JSON playbook configuration'
+        default='dtd_golden_setup',
+        help='Name of the strategy container to backtest (folder name in strategies/)'
     )
     args = parser.parse_args()
     
     data_path = project_root / args.data
-    playbook_path = project_root / args.playbook
+    playbook_path = project_root / 'strategies' / args.strategy / 'strategy_playbook.json'
     
     run_backtest(data_path, playbook_path)
