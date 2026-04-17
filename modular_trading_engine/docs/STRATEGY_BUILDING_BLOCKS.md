@@ -37,8 +37,12 @@ L3 modules zijn de actieve filters. Zij nemen het gekleurde theoriegeheugen over
 ### `ConfirmationHoldLevelTrigger`
 Dit is de kloppende hartklep van je Setup-Detectie. Het is een 1-minuut Sweep & Confirm scanner.
 * **Flow:**  Zoekt over een bias_window (bijv 200 candles) eerst naar een Anchor-Block (Trap), wacht tot prijs die Anchor test, en bevestigt vervolgens het ontstaan van een _nieuw_ Block in die test!
-* **Bias Filter:** Controleert dynamisch of deze Setup netjes in Premium of Discount ligt op basis van zijn eigen venster.
-* **Output:** Bij een harde sweep & confirm spuugt hij de wiskundige target uit naar de rest van de pipeline.
+* **Bias Filter (Premium & Discount):** Filtert setups op grote marktbewegingen.
+  1. Neemt het hoogste en laagste punt over het meegegeven tijdvenster (bias window).
+  2. Berekent het wiskundige midden (50% eq).
+  3. Prijs > 50%: **Premium** Zone (Hier keurt hij alléén Short-setups goed).
+  4. Prijs < 50%: **Discount** Zone (Hier keurt hij alléén Long-setups goed).
+* **Output:** Bij een harde sweep, confirm én Premium/Discount conformering spuugt hij de wiskundige target uit naar de rest van de pipeline.
 
 ### `KillzoneFilter`
 * **Functie:** Tijdslot-filter. Bepaalt of de tijd van de dag wel is toegestaan om the handelen (bijv. in `America/New_York` timezone). Buiten deze zone sneuvelt iedere opgebouwde theorie direct on the spot.
