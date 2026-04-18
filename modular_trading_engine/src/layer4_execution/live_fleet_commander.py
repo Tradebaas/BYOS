@@ -173,6 +173,36 @@ class LiveFleetCommander:
         self.theory_state = MarketTheoryState()
         self.rule_engine = None
         self.data_client = None
+        self.log_queue = asyncio.Queue()
+
+    async def _csv_queue_worker(self, csv_path: Path):
+        """Background worker to write log entries sequentially without blocking the async loop."""
+        while True:
+            row = await self.log_queue.get()
+            if row is None:
+                self.log_queue.task_done()
+                break
+                
+            batch = [row]
+            while not self.log_queue.empty():
+                try:
+                    next_row = self.log_queue.get_nowait()
+                    if next_row is None:
+                        # Re-enqueue the sentinel so future iterations gracefully stop if multiple calls.
+                        self.log_queue.put_nowait(None)
+                        break
+                    batch.append(next_row)
+                except asyncio.QueueEmpty:
+                    break
+                    
+            def _write_batch():
+                with open(csv_path, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(batch)
+                    
+            await asyncio.to_thread(_write_batch)
+            for _ in batch:
+                self.log_queue.task_done()
 
     def load_config(self):
         try:
@@ -230,6 +260,9 @@ class LiveFleetCommander:
         # 1. Warm-up phase (Local CSV -> API Gap Sync)
         logger.info("Fleet Commander: Warming up internal TheoryEngine from historical DB...")
         csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "historical" / "NQ_1min.csv"
+        
+        # Start background CSV worker to decouple I/O bottlenecks
+        asyncio.create_task(self._csv_queue_worker(csv_path))
         
         last_processed_timestamp = None
         
@@ -316,34 +349,32 @@ class LiveFleetCommander:
                 ]
                 
                 if new_bars:
-                    with open(csv_path, 'a', newline='') as f:
-                        writer = csv.writer(f)
-                        for bar in new_bars:
-                            self.theory_state.process_candle(bar)
+                    for bar in new_bars:
+                        self.theory_state.process_candle(bar)
+                        
+                        # Log live candles linearly to CSV without blocking
+                        timestamp_ms = int(bar.timestamp.timestamp() * 1000)
+                        dt_str = bar.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                        self.log_queue.put_nowait([timestamp_ms, dt_str, bar.open, bar.high, bar.low, bar.close, bar.volume, 0])
+                        
+                        last_processed_timestamp = bar.timestamp
+                        
+                        active_orgs_raw = self.theory_state.get_active_origin_levels()
+                        
+                        # Filter explicitly to the strategy's 200-candle bias window
+                        history_len = len(self.theory_state.history)
+                        if history_len > 0:
+                            cutoff_ts = self.theory_state.history[max(0, history_len - 200)].timestamp
+                            active_orgs = [o for o in active_orgs_raw if o.timestamp >= cutoff_ts]
+                        else:
+                            active_orgs = []
                             
-                            # Log live candles linearly to CSV
-                            timestamp_ms = int(bar.timestamp.timestamp() * 1000)
-                            dt_str = bar.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                            writer.writerow([timestamp_ms, dt_str, bar.open, bar.high, bar.low, bar.close, bar.volume, 0])
-                            
-                            last_processed_timestamp = bar.timestamp
-                            
-                            active_orgs_raw = self.theory_state.get_active_origin_levels()
-                            
-                            # Filter explicitly to the strategy's 200-candle bias window
-                            history_len = len(self.theory_state.history)
-                            if history_len > 0:
-                                cutoff_ts = self.theory_state.history[max(0, history_len - 200)].timestamp
-                                active_orgs = [o for o in active_orgs_raw if o.timestamp >= cutoff_ts]
-                            else:
-                                active_orgs = []
-                                
-                            org_info = f"Tracked Origins (200-Window): {len(active_orgs)}"
-                            logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
-                            
-                            # Run Strategy Checks
-                            for acc in self.accounts:
-                                await acc.execute_cycle(bar)
+                        org_info = f"Tracked Origins (200-Window): {len(active_orgs)}"
+                        logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
+                        
+                        # Run Strategy Checks
+                        for acc in self.accounts:
+                            await acc.execute_cycle(bar)
                 
                 await asyncio.sleep(interval)
                 

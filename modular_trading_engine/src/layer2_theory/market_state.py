@@ -116,6 +116,10 @@ class MarketTheoryState:
             if level.level_type == LevelType.BREAK_LEVEL:
                 self.origin_trackers.append(OriginTracker(initial_level=level))
                 
+        # Protect memory leakage during prolonged uptime (max history matches self.history constraint)
+        if len(self.all_theory_levels) > 20000:
+            self.all_theory_levels.pop(0)
+                
         # 3. Escalation & Tracking for existing trackers
         for tracker in self.origin_trackers:
             tracker.process_candle(candle)
