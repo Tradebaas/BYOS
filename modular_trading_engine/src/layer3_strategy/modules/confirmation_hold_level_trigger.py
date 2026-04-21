@@ -42,6 +42,10 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 c2 = history[i+1] # The Break Level Candle
                 if not c2.is_bearish: continue
                 
+                # Rule: Must have 2 consecutive red candles to confirm break level
+                c3 = history[i+2]
+                if not c3.is_bearish: continue
+                
                 # Scan ahead for the Hard Close
                 hard_close_idx = -1
                 for j in range(i+2, min(i+15, end_idx)): # reasonable limit to complete structure
@@ -66,6 +70,10 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 if not c1_bear: continue
                 c2 = history[i+1]
                 if not c2.is_bullish: continue
+                
+                # Rule: Must have 2 consecutive green candles to confirm break level
+                c3 = history[i+2]
+                if not c3.is_bullish: continue
                 
                 hard_close_idx = -1
                 for j in range(i+2, min(i+15, end_idx)):
@@ -208,7 +216,8 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     entry = b2['hold']
                     
                     # PREMIUM/DISCOUNT FILTER
-                    eval_start_idx = max(0, hc2 - bias_window_size)
+                    pd_window_size = self.params.get('premium_discount_window_size', bias_window_size)
+                    eval_start_idx = max(0, hc2 - pd_window_size)
                     eval_candles = history[eval_start_idx:hc2+1]
                     range_high = max(ck.high for ck in eval_candles)
                     range_low = min(ck.low for ck in eval_candles)

@@ -369,7 +369,7 @@ class LiveFleetCommander:
                         else:
                             active_orgs = []
                             
-                        org_info = f"Tracked Origins (200-Window): {len(active_orgs)}"
+                        org_info = f"Tracked Origins (300-Window): {len(active_orgs)}"
                         logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
                         
                         # Run Strategy Checks

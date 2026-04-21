@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Antigravity Absolute Rules for the BYOS Workspace (GSD Method Enforcement)
 
 The codebase inside `modular_trading_engine` follows a STRICT architectural mandate based on the Get Shit Done (GSD) method. As an AI Agent, you MUST adhere to the following rules unconditionally.

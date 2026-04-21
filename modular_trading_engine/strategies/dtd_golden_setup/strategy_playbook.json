@@ -4,7 +4,8 @@
         {
             "module_type": "ConfirmationHoldLevelTrigger",
             "params": {
-                "bias_window_size": 200
+                "bias_window_size": 300,
+                "premium_discount_window_size": 60
             }
         },
         {
@@ -14,7 +15,21 @@
                 "start_minute": 0,
                 "end_hour": 23,
                 "end_minute": 59,
-                "timezone": "America/New_York"
+                "timezone": "America/New_York",
+                "exclude_windows": [
+                    {
+                        "start_hour": 9,
+                        "start_minute": 20,
+                        "end_hour": 9,
+                        "end_minute": 40
+                    },
+                    {
+                        "start_hour": 15,
+                        "start_minute": 50,
+                        "end_hour": 18,
+                        "end_minute": 0
+                    }
+                ]
             }
         },
         {
@@ -30,7 +45,7 @@
                 "entry_frontrun_ticks": 4,
                 "stop_loss_padding_ticks": 0,
                 "absolute_sl_points": 10.0,
-                "absolute_tp_points": 20.0
+                "absolute_tp_points": 15.0
             }
         }
     ]
