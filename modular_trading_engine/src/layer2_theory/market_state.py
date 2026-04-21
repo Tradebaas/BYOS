@@ -2,6 +2,7 @@ from typing import List
 from src.layer1_data.models import Candle
 from src.layer2_theory.models import TheoryLevel, LevelType
 from src.layer2_theory.origin_state_machine import OriginTracker
+from src.layer2_theory.hard_close import is_hard_close
 
 class MarketTheoryState:
     """
@@ -55,7 +56,7 @@ class MarketTheoryState:
         # 2. Validate candidates via Hard Close
         if self.resistance_candidate is not None:
             # Resistance Hold Level (Bullish candidate validated by Bearish Hard Close under its Low)
-            if curr.is_bearish and curr.close < self.resistance_candidate.low:
+            if is_hard_close(self.resistance_candidate.low, curr, is_support=True):
                 new_levels.append(TheoryLevel(
                     timestamp=self.resistance_candidate.timestamp,
                     level_type=LevelType.HOLD_LEVEL,
@@ -69,7 +70,7 @@ class MarketTheoryState:
 
         if self.support_candidate is not None:
             # Support Hold Level (Bearish candidate validated by Bullish Hard Close above its High)
-            if curr.is_bullish and curr.close > self.support_candidate.high:
+            if is_hard_close(self.support_candidate.high, curr, is_support=False):
                 new_levels.append(TheoryLevel(
                     timestamp=self.support_candidate.timestamp,
                     level_type=LevelType.HOLD_LEVEL,

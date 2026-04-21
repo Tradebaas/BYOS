@@ -23,6 +23,7 @@ L2 modules zijn passieve markeringen. Ze genereren géén orders, maar geven de 
 * **Werking:** Analyseert continu de binnenkomende 1-minuut market flow om theorie fundering the leggen.
 * **Techniek:** 
   * **Hold Levels:** Slaat wiskundige candidates (bijv. top/bottom wicks) op en valideert deze uitsluitend als er een Hard Close aan de andere kant plaatsvindt. 
+  * **Hard Closes (ABSOLUTE REGEL):** Een level is pas wiskundig gemarkeerd als Hard Closed wanneer de candle-body (open én close) er volledig doorheen breekt ÉN de candle-kleur (momentum) matcht met de richting van de uitbraak. Een bearish HC (downward break) vereist absoluut een rode candle (`is_bearish`). Een bullish HC (upward break) vereist absoluut een groene candle (`is_bullish`). **Roep waar mogelijk de centrale `is_hard_close()` methode aan vanuit `src/layer2_theory/hard_close.py`. Waar native inline checks voorkomen, controleer ALTIJD de momentum kleur!**
   * **Break Levels:** Tracked sequentie patronen (bijv. Groen, Rood, Rood) om zuivere breaks the diagnosticeren.
 
 ### `OriginStateMachine`

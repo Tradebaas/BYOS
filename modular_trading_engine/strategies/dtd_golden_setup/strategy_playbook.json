@@ -5,7 +5,11 @@
             "module_type": "ConfirmationHoldLevelTrigger",
             "params": {
                 "bias_window_size": 300,
-                "premium_discount_window_size": 60
+                "premium_discount_window_size": 60,
+                "ttl_candles": 10,
+                "sl_points": 15.0,
+                "tp_points": 10.0,
+                "sim_frontrun_points": 2.0
             }
         },
         {
@@ -42,7 +46,7 @@
             "module_type": "RATLimitOrder",
             "params": {
                 "tick_size": 0.25,
-                "entry_frontrun_ticks": 4,
+                "entry_frontrun_ticks": 8,
                 "stop_loss_padding_ticks": 0,
                 "absolute_sl_points": 15.0,
                 "absolute_tp_points": 10.0

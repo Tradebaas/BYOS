@@ -50,7 +50,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 hard_close_idx = -1
                 for j in range(i+2, min(i+15, end_idx)): # reasonable limit to complete structure
                     cj = history[j]
-                    if cj.open < c1.low and cj.close < c1.low:
+                    if cj.is_bearish and cj.open < c1.low and cj.close < c1.low:
                         hard_close_idx = j
                         break
                     if cj.high >= c2.high: # Structure invalidated by pushing past Break Level
@@ -59,7 +59,9 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 if hard_close_idx != -1:
                     blocks.append({
                         'type': 'short',
-                        'hold': c1.open,
+                        'hold_front': c1.low,
+                        'hold_back': c1.high,
+                        'hold_entry': c1.open,
                         'break': c2.high,
                         'c1_idx': i,
                         'hc_idx': hard_close_idx
@@ -78,7 +80,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 hard_close_idx = -1
                 for j in range(i+2, min(i+15, end_idx)):
                     cj = history[j]
-                    if cj.open > c1.high and cj.close > c1.high:
+                    if cj.is_bullish and cj.open > c1.high and cj.close > c1.high:
                         hard_close_idx = j
                         break
                     if cj.low <= c2.low:
@@ -87,7 +89,9 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 if hard_close_idx != -1:
                     blocks.append({
                         'type': 'long',
-                        'hold': c1.open,
+                        'hold_front': c1.high,
+                        'hold_back': c1.low,
+                        'hold_entry': c1.open,
                         'break': c2.low,
                         'c1_idx': i,
                         'hc_idx': hard_close_idx
@@ -170,19 +174,19 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 for k in range(anchor['last_checked_idx'] + 1, b['c1_idx'] + 1):
                     ck = history[k]
                     if not is_bullish:
-                        # HARD CLOSE INVALIDATION: Green candle closing above Hold Level
-                        if ck.is_bullish and ck.open > anchor['hold'] and ck.close > anchor['hold']:
+                        # HARD CLOSE INVALIDATION: Green candle closing above Hold Level's open (front body wall)
+                        if ck.is_bullish and ck.open > anchor['hold_entry'] and ck.close > anchor['hold_entry']:
                             was_invalidated = True
                             break
-                        # The test can ONLY happen after the previous trade lock expires
-                        if ck.high >= anchor['hold'] and k > locked_until_idx:
+                        # The test can ONLY happen after the previous trade lock expires (touching the front wall)
+                        if ck.high >= anchor['hold_front'] and k > locked_until_idx:
                             found_test = k
                     else:
-                        # HARD CLOSE INVALIDATION: Red candle closing below Hold Level
-                        if ck.is_bearish and ck.open < anchor['hold'] and ck.close < anchor['hold']:
+                        # HARD CLOSE INVALIDATION: Red candle closing below Hold Level's open (front body wall)
+                        if ck.is_bearish and ck.open < anchor['hold_entry'] and ck.close < anchor['hold_entry']:
                             was_invalidated = True
                             break
-                        if ck.low <= anchor['hold'] and k > locked_until_idx:
+                        if ck.low <= anchor['hold_front'] and k > locked_until_idx:
                             found_test = k
                             
                 if was_invalidated:
@@ -205,15 +209,15 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
             if confirmed_setups:
                 # Pick the setup with the most optimal anchor (closest to extreme)
                 if is_bullish:
-                    best_setup = min(confirmed_setups, key=lambda s: s['anchor']['hold'])
+                    best_setup = min(confirmed_setups, key=lambda s: s['anchor']['hold_entry'])
                 else:
-                    best_setup = max(confirmed_setups, key=lambda s: s['anchor']['hold'])
+                    best_setup = max(confirmed_setups, key=lambda s: s['anchor']['hold_entry'])
                     
                 b2 = best_setup['b2']
                 hc2 = b2['hc_idx']
                 
                 if hc2 > locked_until_idx:
-                    entry = b2['hold']
+                    entry = b2['hold_entry']
                     
                     # PREMIUM/DISCOUNT FILTER
                     pd_window_size = self.params.get('premium_discount_window_size', bias_window_size)
@@ -276,7 +280,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     is_bullish=is_bullish,
                     price_high=latest_valid_setup['break'], 
                     price_low=latest_valid_setup['break'],
-                    price_open=latest_valid_setup['hold'],
+                    price_open=latest_valid_setup['hold_entry'],
                     status="identified_hl2"
                 )
                 context.setup_candidates.append(RetroScannerTracker(level_data))
