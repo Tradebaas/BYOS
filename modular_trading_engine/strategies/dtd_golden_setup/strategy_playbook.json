@@ -35,7 +35,7 @@
         {
             "module_type": "TTLTimeout",
             "params": {
-                "max_candles_open": 30
+                "max_candles_open": 10
             }
         },
         {
@@ -44,8 +44,8 @@
                 "tick_size": 0.25,
                 "entry_frontrun_ticks": 4,
                 "stop_loss_padding_ticks": 0,
-                "absolute_sl_points": 10.0,
-                "absolute_tp_points": 15.0
+                "absolute_sl_points": 15.0,
+                "absolute_tp_points": 10.0
             }
         }
     ]
