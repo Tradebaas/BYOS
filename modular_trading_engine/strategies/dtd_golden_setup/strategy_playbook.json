@@ -5,11 +5,11 @@
             "module_type": "ConfirmationHoldLevelTrigger",
             "params": {
                 "bias_window_size": 300,
-                "premium_discount_window_size": 60,
-                "ttl_candles": 10,
-                "sl_points": 15.0,
-                "tp_points": 10.0,
-                "sim_frontrun_points": 2.0
+                "premium_discount_window_size": 150,
+                "ttl_candles": 15,
+                "sl_points": 12.0,
+                "tp_points": 12.0,
+                "sim_frontrun_points": 3.0
             }
         },
         {
@@ -39,17 +39,17 @@
         {
             "module_type": "TTLTimeout",
             "params": {
-                "max_candles_open": 10
+                "max_candles_open": 15
             }
         },
         {
             "module_type": "RATLimitOrder",
             "params": {
                 "tick_size": 0.25,
-                "entry_frontrun_ticks": 8,
+                "entry_frontrun_ticks": 12,
                 "stop_loss_padding_ticks": 0,
-                "absolute_sl_points": 15.0,
-                "absolute_tp_points": 10.0
+                "absolute_sl_points": 12.0,
+                "absolute_tp_points": 12.0
             }
         }
     ]

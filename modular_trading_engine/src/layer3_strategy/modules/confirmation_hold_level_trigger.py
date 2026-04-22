@@ -203,11 +203,14 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     anchor['last_checked_idx'] = b['c1_idx']
                     surviving_anchors.append(anchor)
                     
-            trade_generated = False
+            handled_as_execution = False
             
             # Check if this valid confirmation yields a trade!
             if confirmed_setups:
-                # Pick the setup with the most optimal anchor (closest to extreme)
+                # The structural scenario played out! B2 and ALL confirmed test anchors are consumed.
+                handled_as_execution = True
+                
+                # Pick the setup with the most optimal anchor (closest to extreme) for the actual signal
                 if is_bullish:
                     best_setup = min(confirmed_setups, key=lambda s: s['anchor']['hold_entry'])
                 else:
@@ -252,15 +255,12 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                         
                         # Store as our latest candidate (keeping mathematical hold level pure)
                         latest_valid_setup = b2
-                        trade_generated = True
 
-            if trade_generated:
-                # RESET completely: wait for NEXT Trap/Test
-                active_anchors = []
-            else:
-                # Add this new block natively as a floating anchor for the future
+            # 'b' only becomes a new parallel test block (Anchor) if it wasn't swallowed as an Execution Block
+            if not handled_as_execution:
                 surviving_anchors.append(b)
-                active_anchors = surviving_anchors
+                
+            active_anchors = surviving_anchors
 
         # 4. We only process the final state if it is currently locked into the live edge
         if latest_valid_setup:
