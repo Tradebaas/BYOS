@@ -25,7 +25,8 @@ class TopstepClient:
         self._session = requests.Session()
         self._session.headers.update({
             "Authorization": f"Bearer {self.credentials.jwt_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         })
 
     CHART_API_URL = "https://chartapi.topstepx.com/History/v2"
