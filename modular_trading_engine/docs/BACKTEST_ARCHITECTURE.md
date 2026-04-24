@@ -33,3 +33,19 @@ Waar de **Live Bot** leest uit: `Topstep Websocket -> Playbook Rules -> Live Bro
 Leest de **Backtester** uit: `Lokale CSV File -> Playbook Rules -> FAST-FWD Terminal Executie`. 
 
 Je valideert vanmiddag lokaal in je CLI exáct de module-logica die de engine maandagochtend live gaat draaien! 
+
+---
+
+## 🧠 4. Lessons Learned & Execution Parity (The GSD Method)
+
+### The Intra-bar Granularity Illusion
+Wanneer backtests draaien op M1 (1 minuut) data, ontstaat er een dodelijke blinde vlek bij limit orders die in *hetzelfde* tijdsframe worden gevuld waarin ook een TP (Take Profit) of SL (Stop Loss) geraakt zou kunnen worden. Backtesters vergelijken vaak statisch of de `Low` van de minuut de TP heeft geraakt, zonder chronologisch besef. 
+
+**Voorbeeld:**
+Een minuut opent op `100`, daalt naar `95` (Low), schiet omhoog naar `110` (High), en sluit op `105`.
+Een short limiet order op `108` wordt in deze minuut gevuld, en heeft een TP op `98`. 
+Een foute simulator ziet dat de `Low` (`95`) lager is dan de TP (`98`) en registreert een **WIN**. 
+Dit is een illusie! Omdat het een **Bullish candle** betreft (Close > Open), moet de prijs *eerst* gedaald zijn naar `95` (de Low), om vervolgens omhoog te vliegen naar `110` (de High), waar de order pas gevuld wordt op `108`. Vanaf dat punt (de top) daalt hij nog slechts naar de sluiting op `105`. Jouw TP op `98` werd dus na je fill **nooit meer geraakt**. Waarschijnlijk werd in de minuten daaropvolgend onverwachts je SL the pakken genomen. Dit was het verschil tussen een "Backtest-Win" en een "Live-Loss".
+
+### De Oplossing: De 'Synthetic Remainder Candle'
+Om 100% parity te bieden ten opzichte van de live executie (TopStepX), implementeert de Backtest Simulator nu intern een "synthetic remainder candle". Wanneer een limietorder getriggerd wordt, reconstrueert de engine de op/neer volgorde van de minuut op de polariteit (Bullish/Bearish). Dit stript direct de 'pre-fill' data, en bouwt een virtuele rest-candle op ("vanaf het fill moment, tot het einde van de minuut"). SL en TP worden exclusief getoetst aan de rest-capaciteit van de M1 bar, met absolute precisie. Hierdoor matchen jouw live losses 1:1 met de gesimuleerde sessies.

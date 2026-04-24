@@ -21,6 +21,7 @@ from modular_trading_engine.src.layer4_execution.auth import fetch_topstepx_jwt
 from modular_trading_engine.src.layer2_theory.market_state import MarketTheoryState
 from modular_trading_engine.src.layer3_strategy.config_parser import ConfigParser
 from modular_trading_engine.src.layer3_strategy.rule_engine import RuleEngine
+from modular_trading_engine.src.layer4_execution.trade_ledger import TradeLedger
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("FleetCommander")
@@ -28,12 +29,13 @@ logger = logging.getLogger("FleetCommander")
 CONFIG_FILE = Path(__file__).parent.parent.parent / "execution_config.json"
 
 class AccountManager:
-    def __init__(self, config: dict, client: TopstepClient, theory_state: MarketTheoryState, rule_engine: RuleEngine, global_settings: dict):
+    def __init__(self, config: dict, client: TopstepClient, theory_state: MarketTheoryState, rule_engine: RuleEngine, global_settings: dict, trade_ledger: TradeLedger):
         self.config = config
         self.client = client
         self.theory_state = theory_state
         self.rule_engine = rule_engine
         self.global_settings = global_settings
+        self.trade_ledger = trade_ledger
         self.account_id = config.get("account_id")
         self.symbol = config.get("symbol", "MNQ")
         self.order_size = config.get("order_size", 1)
@@ -45,6 +47,7 @@ class AccountManager:
         self.placed_entry_orders = [] # keep track of pending limit orders
         self.last_ordered_setup_price = None
         self.last_ordered_setup_direction = None
+        self.active_trade_log = None # Tracks open position for CSV ledger
         
     async def get_positions_and_orders(self):
         """
@@ -103,6 +106,39 @@ class AccountManager:
                 active_pos = p
                 break
                 
+        # LEDGER TRACKING LOGIC
+        if active_pos:
+            size_raw = active_pos.get("positionSize", 0)
+            avg_price = active_pos.get("averagePrice", self.last_ordered_setup_price or latest_candle.close)
+            if not self.active_trade_log:
+                trade_dir = "LONG" if size_raw > 0 else "SHORT"
+                self.active_trade_log = {
+                    "entry_time": datetime.now(timezone.utc),
+                    "direction": trade_dir,
+                    "entry_price": float(avg_price)
+                }
+        else:
+            if self.active_trade_log:
+                closed_price = latest_candle.close
+                recent_fills = [o for o in orders if o.get("status") in [4, "Filled"] and self.symbol in o.get("symbolName", "")]
+                if recent_fills:
+                    recent_fills.sort(key=lambda x: int(x.get("id", 0)))
+                    last_fill = recent_fills[-1]
+                    if "averagePrice" in last_fill and last_fill["averagePrice"] is not None and float(last_fill["averagePrice"]) > 0:
+                        closed_price = float(last_fill["averagePrice"])
+                
+                self.trade_ledger.log_closed_trade(
+                    entry_dt=self.active_trade_log["entry_time"],
+                    exit_dt=datetime.now(timezone.utc),
+                    account_id=self.account_id,
+                    symbol=self.symbol,
+                    direction=self.active_trade_log["direction"],
+                    entry_price=self.active_trade_log["entry_price"],
+                    exit_price=closed_price,
+                    tick_size=self.client.tick_size
+                )
+                self.active_trade_log = None
+
         # 2. Break-Even Management on active positions
         if active_pos:
             size_remaining = abs(active_pos.get("positionSize", 0))
@@ -173,6 +209,7 @@ class LiveFleetCommander:
         self.theory_state = MarketTheoryState()
         self.rule_engine = None
         self.data_client = None
+        self.trade_ledger = TradeLedger(root_dir)
         self.log_queue = asyncio.Queue()
 
     async def _csv_queue_worker(self, csv_path: Path):
@@ -250,7 +287,8 @@ class LiveFleetCommander:
                 client=client,
                 theory_state=self.theory_state,
                 rule_engine=self.rule_engine,
-                global_settings=self.global_settings
+                global_settings=self.global_settings,
+                trade_ledger=self.trade_ledger
             )
             self.accounts.append(manager)
             

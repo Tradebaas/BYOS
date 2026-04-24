@@ -224,21 +224,25 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                     
                     # PREMIUM/DISCOUNT FILTER
                     pd_window_size = self.params.get('premium_discount_window_size', bias_window_size)
-                    eval_start_idx = max(0, hc2 - pd_window_size)
-                    eval_candles = history[eval_start_idx:hc2+1]
-                    range_high = max(ck.high for ck in eval_candles)
-                    range_low = min(ck.low for ck in eval_candles)
-                    midpoint = (range_high + range_low) / 2
-                    
                     is_valid_zone = False
-                    if not is_bullish:
-                        # Short -> Must be in Premium (Top 50%)
-                        if entry >= midpoint:
-                            is_valid_zone = True
+                    
+                    if pd_window_size == 0:
+                        is_valid_zone = True
                     else:
-                        # Long -> Must be in Discount (Bottom 50%)
-                        if entry <= midpoint:
-                            is_valid_zone = True
+                        eval_start_idx = max(0, hc2 - pd_window_size)
+                        eval_candles = history[eval_start_idx:hc2+1]
+                        range_high = max(ck.high for ck in eval_candles)
+                        range_low = min(ck.low for ck in eval_candles)
+                        midpoint = (range_high + range_low) / 2
+                        
+                        if not is_bullish:
+                            # Short -> Must be in Premium (Top 50%)
+                            if entry >= midpoint:
+                                is_valid_zone = True
+                        else:
+                            # Long -> Must be in Discount (Bottom 50%)
+                            if entry <= midpoint:
+                                is_valid_zone = True
                             
                     if is_valid_zone:
                         sim_frontrun = self.params.get('sim_frontrun_points', 1.0)
