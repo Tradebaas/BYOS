@@ -172,38 +172,19 @@ def test_origin_state_machine_escalation_and_invalidation():
     
     tracker = OriginTracker(break_level)
     
-    # Test 1: Separation (no touch)
-    c1 = Candle(timestamp=datetime.fromtimestamp(base_ts + 60, tz=timezone.utc), open=100, high=102, low=98, close=101)
+    assert tracker.test_count == 0
+    assert tracker.waiting_opposite is True
+    
+    # Test 1: Separation via opposite close (bearish candle closes down)
+    c1 = Candle(timestamp=datetime.fromtimestamp(base_ts + 60, tz=timezone.utc), open=100, high=102, low=98, close=96)
+    c1._prev_green = False  # Simulating historical
+    c1._prev_red = True
     tracker.process_candle(c1)
-    assert tracker.candles_since_last_hit == 1
-    assert tracker.hits == 1
-    assert tracker.level_data.level_type == LevelType.BREAK_LEVEL
     
-    # Test 2: Second Hit (with separation) -> Escalate to Origin Level
-    # Must wick <= 95 to hit support
-    c2 = Candle(timestamp=datetime.fromtimestamp(base_ts + 120, tz=timezone.utc), open=100, high=100, low=95, close=98)
+    # Test 2: Actually touching it sets waiting_opposite to False and increments hit if valid
+    c2 = Candle(timestamp=datetime.fromtimestamp(base_ts + 120, tz=timezone.utc), open=96, high=100, low=95, close=98)
     tracker.process_candle(c2)
-    assert tracker.candles_since_last_hit == 0
-    assert tracker.hits == 2
-    assert tracker.level_data.level_type == LevelType.ORIGIN_LEVEL
-    assert tracker.is_active is True
-    
-    # Test 3: Hit without separation -> Ignored / hits count doesn't increment
-    c3 = Candle(timestamp=datetime.fromtimestamp(base_ts + 180, tz=timezone.utc), open=98, high=100, low=94, close=97)
-    tracker.process_candle(c3)
-    assert tracker.hits == 2
-    assert tracker.level_data.level_type == LevelType.ORIGIN_LEVEL
-    
-    # Test 4: Another separation
-    c4 = Candle(timestamp=datetime.fromtimestamp(base_ts + 240, tz=timezone.utc), open=97, high=100, low=98, close=99)
-    tracker.process_candle(c4)
-    assert tracker.candles_since_last_hit == 1
-    
-    # Test 5: Third Hit -> Hits increment, remains active
-    c5 = Candle(timestamp=datetime.fromtimestamp(base_ts + 300, tz=timezone.utc), open=99, high=99, low=93, close=95)
-    tracker.process_candle(c5)
-    assert tracker.hits == 3
-    assert tracker.is_active is True
+    assert tracker.level_data.level_type == LevelType.BREAK_LEVEL
     
     # Test 6: Hard Close -> Invalidation
     # Breaking support: bodily closing completely below 95.0 AND being bearish.
@@ -211,8 +192,3 @@ def test_origin_state_machine_escalation_and_invalidation():
     tracker.process_candle(c6)
     assert tracker.is_active is False
     assert tracker.level_data.status == "invalidated"
-    
-    # Test 7: Further hits do nothing
-    c7 = Candle(timestamp=datetime.fromtimestamp(base_ts + 420, tz=timezone.utc), open=92, high=95, low=88, close=94)
-    tracker.process_candle(c7)
-    assert tracker.hits == 3

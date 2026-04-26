@@ -21,6 +21,7 @@ from modular_trading_engine.src.layer4_execution.auth import fetch_topstepx_jwt
 from modular_trading_engine.src.layer2_theory.market_state import MarketTheoryState
 from modular_trading_engine.src.layer3_strategy.config_parser import ConfigParser
 from modular_trading_engine.src.layer3_strategy.rule_engine import RuleEngine
+from modular_trading_engine.src.layer4_execution.trade_ledger import TradeLedger
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("FleetCommander")
@@ -28,12 +29,13 @@ logger = logging.getLogger("FleetCommander")
 CONFIG_FILE = Path(__file__).parent.parent.parent / "execution_config.json"
 
 class AccountManager:
-    def __init__(self, config: dict, client: TopstepClient, theory_state: MarketTheoryState, rule_engine: RuleEngine, global_settings: dict):
+    def __init__(self, config: dict, client: TopstepClient, theory_state: MarketTheoryState, rule_engine: RuleEngine, global_settings: dict, trade_ledger: TradeLedger):
         self.config = config
         self.client = client
         self.theory_state = theory_state
         self.rule_engine = rule_engine
         self.global_settings = global_settings
+        self.trade_ledger = trade_ledger
         self.account_id = config.get("account_id")
         self.symbol = config.get("symbol", "MNQ")
         self.order_size = config.get("order_size", 1)
@@ -45,6 +47,7 @@ class AccountManager:
         self.placed_entry_orders = [] # keep track of pending limit orders
         self.last_ordered_setup_price = None
         self.last_ordered_setup_direction = None
+        self.active_trade_log = None # Tracks open position for CSV ledger
         
     async def get_positions_and_orders(self):
         """
@@ -103,6 +106,39 @@ class AccountManager:
                 active_pos = p
                 break
                 
+        # LEDGER TRACKING LOGIC
+        if active_pos:
+            size_raw = active_pos.get("positionSize", 0)
+            avg_price = active_pos.get("averagePrice", self.last_ordered_setup_price or latest_candle.close)
+            if not self.active_trade_log:
+                trade_dir = "LONG" if size_raw > 0 else "SHORT"
+                self.active_trade_log = {
+                    "entry_time": datetime.now(timezone.utc),
+                    "direction": trade_dir,
+                    "entry_price": float(avg_price)
+                }
+        else:
+            if self.active_trade_log:
+                closed_price = latest_candle.close
+                recent_fills = [o for o in orders if o.get("status") in [4, "Filled"] and self.symbol in o.get("symbolName", "")]
+                if recent_fills:
+                    recent_fills.sort(key=lambda x: int(x.get("id", 0)))
+                    last_fill = recent_fills[-1]
+                    if "averagePrice" in last_fill and last_fill["averagePrice"] is not None and float(last_fill["averagePrice"]) > 0:
+                        closed_price = float(last_fill["averagePrice"])
+                
+                self.trade_ledger.log_closed_trade(
+                    entry_dt=self.active_trade_log["entry_time"],
+                    exit_dt=datetime.now(timezone.utc),
+                    account_id=self.account_id,
+                    symbol=self.symbol,
+                    direction=self.active_trade_log["direction"],
+                    entry_price=self.active_trade_log["entry_price"],
+                    exit_price=closed_price,
+                    tick_size=self.client.tick_size
+                )
+                self.active_trade_log = None
+
         # 2. Break-Even Management on active positions
         if active_pos:
             size_remaining = abs(active_pos.get("positionSize", 0))
@@ -166,13 +202,44 @@ class AccountManager:
 
 class LiveFleetCommander:
     def __init__(self, strategy_name=None):
-        self.strategy_name = strategy_name
+        self.strategy_name = strategy_name or "dtd_golden_setup"
         self.accounts = []
         self.global_settings = {}
         # Strategy specific execution
         self.theory_state = MarketTheoryState()
         self.rule_engine = None
         self.data_client = None
+        self.trade_ledger = TradeLedger(root_dir)
+        self.log_queue = asyncio.Queue()
+
+    async def _csv_queue_worker(self, csv_path: Path):
+        """Background worker to write log entries sequentially without blocking the async loop."""
+        while True:
+            row = await self.log_queue.get()
+            if row is None:
+                self.log_queue.task_done()
+                break
+                
+            batch = [row]
+            while not self.log_queue.empty():
+                try:
+                    next_row = self.log_queue.get_nowait()
+                    if next_row is None:
+                        # Re-enqueue the sentinel so future iterations gracefully stop if multiple calls.
+                        self.log_queue.put_nowait(None)
+                        break
+                    batch.append(next_row)
+                except asyncio.QueueEmpty:
+                    break
+                    
+            def _write_batch():
+                with open(csv_path, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(batch)
+                    
+            await asyncio.to_thread(_write_batch)
+            for _ in batch:
+                self.log_queue.task_done()
 
     def load_config(self):
         try:
@@ -220,7 +287,8 @@ class LiveFleetCommander:
                 client=client,
                 theory_state=self.theory_state,
                 rule_engine=self.rule_engine,
-                global_settings=self.global_settings
+                global_settings=self.global_settings,
+                trade_ledger=self.trade_ledger
             )
             self.accounts.append(manager)
             
@@ -228,8 +296,11 @@ class LiveFleetCommander:
 
     async def run_forever(self):
         # 1. Warm-up phase (Local CSV -> API Gap Sync)
-        logger.info("Fleet Commander: Warming up internal ZebasEngine from historical DB...")
+        logger.info("Fleet Commander: Warming up internal TheoryEngine from historical DB...")
         csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "historical" / "NQ_1min.csv"
+        
+        # Start background CSV worker to decouple I/O bottlenecks
+        asyncio.create_task(self._csv_queue_worker(csv_path))
         
         last_processed_timestamp = None
         
@@ -277,7 +348,7 @@ class LiveFleetCommander:
                             # Schema: timestamp_ms,datetime_utc,open,high,low,close,volume,trade_count
                             writer.writerow([timestamp_ms, dt_str, b.open, b.high, b.low, b.close, b.volume, 0])
                             last_processed_timestamp = b.timestamp
-                logger.info("Successfully patched historical data gap and synchronized ZebasEngine.")
+                logger.info("Successfully patched historical data gap and synchronized TheoryEngine.")
             else:
                 logger.info("Local DB is fully up-to-date. No gap sync needed.")
         else:
@@ -306,7 +377,7 @@ class LiveFleetCommander:
                 recent_bars = self.data_client.fetch_historical_bars(symbol="/NQ", resolution="1", lookback_mins=5)
                 
                 # We ONLY process completely closed candles to prevent 'ghost ticks' 
-                # from permanently cementing a fake candle in the ZebasEngine state.
+                # from permanently cementing a fake candle in the TheoryEngine state.
                 current_minute = datetime.now(timezone.utc).replace(second=0, microsecond=0)
                 
                 new_bars = [
@@ -316,34 +387,32 @@ class LiveFleetCommander:
                 ]
                 
                 if new_bars:
-                    with open(csv_path, 'a', newline='') as f:
-                        writer = csv.writer(f)
-                        for bar in new_bars:
-                            self.theory_state.process_candle(bar)
+                    for bar in new_bars:
+                        self.theory_state.process_candle(bar)
+                        
+                        # Log live candles linearly to CSV without blocking
+                        timestamp_ms = int(bar.timestamp.timestamp() * 1000)
+                        dt_str = bar.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                        self.log_queue.put_nowait([timestamp_ms, dt_str, bar.open, bar.high, bar.low, bar.close, bar.volume, 0])
+                        
+                        last_processed_timestamp = bar.timestamp
+                        
+                        active_orgs_raw = self.theory_state.get_active_origin_levels()
+                        
+                        # Filter explicitly to the strategy's 200-candle bias window
+                        history_len = len(self.theory_state.history)
+                        if history_len > 0:
+                            cutoff_ts = self.theory_state.history[max(0, history_len - 200)].timestamp
+                            active_orgs = [o for o in active_orgs_raw if o.timestamp >= cutoff_ts]
+                        else:
+                            active_orgs = []
                             
-                            # Log live candles linearly to CSV
-                            timestamp_ms = int(bar.timestamp.timestamp() * 1000)
-                            dt_str = bar.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                            writer.writerow([timestamp_ms, dt_str, bar.open, bar.high, bar.low, bar.close, bar.volume, 0])
-                            
-                            last_processed_timestamp = bar.timestamp
-                            
-                            active_orgs_raw = self.theory_state.get_active_origin_levels()
-                            
-                            # Filter explicitly to the strategy's 200-candle bias window
-                            history_len = len(self.theory_state.history)
-                            if history_len > 0:
-                                cutoff_ts = self.theory_state.history[max(0, history_len - 200)].timestamp
-                                active_orgs = [o for o in active_orgs_raw if o.timestamp >= cutoff_ts]
-                            else:
-                                active_orgs = []
-                                
-                            org_info = f"Tracked Origins (200-Window): {len(active_orgs)}"
-                            logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
-                            
-                            # Run Strategy Checks
-                            for acc in self.accounts:
-                                await acc.execute_cycle(bar)
+                        org_info = f"Tracked Origins (300-Window): {len(active_orgs)}"
+                        logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
+                        
+                        # Run Strategy Checks
+                        for acc in self.accounts:
+                            await acc.execute_cycle(bar)
                 
                 await asyncio.sleep(interval)
                 

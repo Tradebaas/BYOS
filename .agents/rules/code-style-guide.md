@@ -1,0 +1,26 @@
+---
+trigger: always_on
+---
+
+# Antigravity Absolute Rules for the BYOS Workspace (GSD Method Enforcement)
+
+The codebase inside `modular_trading_engine` follows a STRICT architectural mandate based on the Get Shit Done (GSD) method. As an AI Agent, you MUST adhere to the following rules unconditionally.
+
+## 1. Zero Tolerance for "Cowboy Coding" & Technical Debt
+- **NO Patch Scripts**: Never create `patch.py`, `debug.py`, `trace.py`, or any arbitrary python scripts to "quickly debug" an issue into the root directory or the `scripts/` directory. All temporary exploration must happen in memory, in `.tmp`, or in isolated, instantly-deleted test files.
+- **NO Leftover Dumps**: Never leave `.txt`, `.csv`, `.log`, or other uncommitted output dumps in the workspace. The master branch is sacred.
+- **Strict Separation of Concerns**: "Layer 1" (Data) -> "Layer 2" (Mathematical Theory) -> "Layer 3" (Strategy Config) -> "Layer 4" (Broker Execution). Layers can **NEVER** import or reference data from layers above them. 
+
+## 2. Guardrails voor Nieuwe Authenticiteit (Strategieën & Modules)
+- **Anti-Pattern (Verboden)**: Nieuwe theorie-trackers of filters direct hardcoden in de `MarketTheoryState` of in de Live Fleet Commander, of random JSON bestanden slingeren in willekeurige mappen.
+- **Regel voor Nieuwe Strategieën**: Als de gebruiker een nieuwe trading strategie wilt starten, MAAK DAN NOOIT DIRECT CODESCRIPT AAN. Kopieer uitsluitend de template folder naar `strategies/<naam>/`, pas de `strategy_playbook.json` en de `README.md` aan. Python code zelf blijft altijd ongewijzigd.
+- **Regel voor Nieuwe Bouwblokken (Modules)**: Als het opzetten van de strategie vereist dat we een nieuw *Framework Bouwblok* (bijv. een nieuwe Trigger, LimitOrder of Tracking State) moeten programmeren in Layer 2 of Layer 3: ONDERNEEM GEEN ENKELE ACTIE TOTDAT JE `docs/STRATEGY_BUILDING_BLOCKS.md` HEBT GELEZEN VIA DE `view_file` TOOL. Dat document is de absolute bron van de waarheid. Staat het blok er niet in? Bouw het dan niet. Je plant en schrijft eerst de API documentatie daar, pas na akkoord wijzig je de broncode.
+
+## 3. GSD Planning Mandate
+- **Always Plan**: Before implementing any structural change (especially new modules or architecture level edits), you must use the `implementation_plan.md` artifact workflow and await user authorization.
+- **No Monoliths**: Do not combine responsibilities. Keep functions pure. We rely on the `pytest-archon` verifiers. If you break the imports, the Pre-Commit hook will block your work!
+
+## 4. Communication requirement (De Kanarie)
+To mathematically verify that you, the AI, are loading and reading these rules on every interaction, you MUST terminate EVERY single response to the user with the following exact kanarie symbol: 🐤
+
+Failure to append this phrase means you have failed your structural constraints.

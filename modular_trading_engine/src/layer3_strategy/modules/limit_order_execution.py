@@ -85,5 +85,5 @@ class RATLimitOrder(BaseStrategyModule):
                 breakeven_trigger_price=breakeven_trigger,
                 breakeven_target_price=breakeven_target
             )
-            print(f"[{context.timestamp}] Generated {'Long' if level.is_bullish else 'Short'} intent: ep={entry_price} sl={stop_loss} ts={level.timestamp}")
+            print(f"[{context.timestamp}] Generated {'Long' if level.is_bullish else 'Short'} intent: ep={entry_price} sl={stop_loss} tp={take_profit} ts={level.timestamp}")
             context.intents.append(intent)

@@ -40,7 +40,7 @@ def test_simulator_limit_fill_and_tp():
     assert sim.pending_intent is None
     assert sim.active_pos is not None
     # Verify MAE/MFE update on the same candle that triggered the fill
-    assert sim.active_pos.mfe == 110.0
+    assert sim.active_pos.mfe == 102.0
     assert sim.active_pos.mae == 95.0
     
     # 3. Pullback pushing MAE lower, but not hitting SL (90.0)

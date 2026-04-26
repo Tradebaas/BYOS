@@ -1,11 +1,11 @@
-from typing import Optional
+from typing import Optional, Any
 
 from src.layer1_data.models import Candle
 from src.layer3_strategy.models import OrderIntent
 from src.layer4_execution.data_vault import DataVault, TradeRecord
 
 class ActivePosition:
-    def __init__(self, intent: OrderIntent, fill_time: float):
+    def __init__(self, intent: OrderIntent, fill_time: Any):
         self.intent = intent
         self.fill_time = fill_time
         
@@ -27,10 +27,27 @@ class BacktestSimulator:
         self.pending_intent: Optional[OrderIntent] = None
         self.active_pos: Optional[ActivePosition] = None
         
+        # Parity with LiveFleetCommander lock
+        self.last_ordered_setup_price: Optional[float] = None
+        self.last_ordered_setup_direction: Optional[bool] = None
+        
+    def cancel_all(self) -> None:
+        """Simulate a CancelAll operation (e.g. tracking TTL timeout or rules shift)"""
+        self.pending_intent = None
+        self.last_ordered_setup_price = None
+        self.last_ordered_setup_direction = None
+        
     def stage_order(self, intent: OrderIntent) -> None:
         """Called by Layer 3 to submit a new limit order."""
         if self.active_pos is None:
+            # Replicate live order lock to prevent multiple trades on the identical setup
+            if intent.entry_price == getattr(self, "last_ordered_setup_price", None) and \
+               intent.is_bullish == getattr(self, "last_ordered_setup_direction", None):
+                return
+                
             self.pending_intent = intent
+            self.last_ordered_setup_price = intent.entry_price
+            self.last_ordered_setup_direction = intent.is_bullish
             
     def process_candle(self, candle: Candle) -> None:
         """
@@ -63,51 +80,117 @@ class BacktestSimulator:
             is_filled = candle.high >= intent.entry_price
             
         if is_filled:
-            self.active_pos = ActivePosition(intent=intent, fill_time=candle.timestamp.timestamp())
+            self.active_pos = ActivePosition(intent=intent, fill_time=candle.timestamp)
             self.pending_intent = None
             
             # CRITICAL: We just got filled inside this M1 candle. 
-            # We must immediately evaluate the REST of the candle to see if we also hit SL/TP inside the entry minute.
-            self._evaluate_active_position(candle)
+            # We must NOT use the full candle low/high for TP/SL because part of that candle happened BEFORE we got filled.
+            # E.g. a Short Limit is filled at the high. If the candle is bullish, the low happened BEFORE the fill.
+            
+            # Construct a synthetic 'remainder' candle based on polarity
+            remainder_high = candle.high
+            remainder_low = candle.low
+            
+            if candle.is_bullish:
+                if intent.is_bullish:
+                    # Long limit filled at Low. Remainder path is Low -> High -> Close
+                    remainder_low = intent.entry_price
+                else:
+                    # Short limit filled at High. Remainder path is High -> Close
+                    remainder_low = min(intent.entry_price, candle.close)
+            else:
+                if intent.is_bullish:
+                    # Long limit filled at Low. Remainder path is Low -> Close
+                    remainder_high = max(intent.entry_price, candle.close)
+                else:
+                    # Short limit filled at High. Remainder path is High -> Low -> Close
+                    remainder_high = intent.entry_price
+                    
+            remainder_candle = Candle(
+                timestamp=candle.timestamp,
+                open=intent.entry_price,
+                high=remainder_high,
+                low=remainder_low,
+                close=candle.close,
+                volume=0
+            )                    
+            self._evaluate_active_position(remainder_candle)
 
     def _evaluate_active_position(self, candle: Candle) -> None:
+        """
+        Evaluates an active position against the current incoming candle.
+        Closes the position if TP or SL is hit.
+        """
         pos = self.active_pos
+        if not pos:
+            return
+            
         intent = pos.intent
         
         # 1. Update MAE/MFE continuously based on candle extremes
         if intent.is_bullish:
             if candle.high > pos.mfe: pos.mfe = candle.high
             if candle.low < pos.mae: pos.mae = candle.low
-            
-            # Trade Management: Breakeven Check
-            if not pos.breakeven_activated and intent.breakeven_trigger_price is not None:
-                if candle.high >= intent.breakeven_trigger_price:
-                    pos.current_stop_loss = intent.breakeven_target_price
-                    pos.breakeven_activated = True
-            
-            hit_sl = candle.low <= pos.current_stop_loss
-            hit_tp = candle.high >= intent.take_profit
         else:
             if candle.low < pos.mfe: pos.mfe = candle.low
             if candle.high > pos.mae: pos.mae = candle.high
             
-            # Trade Management: Breakeven Check
-            if not pos.breakeven_activated and intent.breakeven_trigger_price is not None:
+        tp = intent.take_profit
+        sl = pos.current_stop_loss
+        
+        if intent.is_bullish:
+            high_breach = candle.high >= tp
+            low_breach = candle.low <= sl
+        else:
+            high_breach = candle.high >= sl
+            low_breach = candle.low <= tp
+
+        # Handle Breakeven target trigger
+        if intent.breakeven_trigger_price is not None and not pos.breakeven_activated:
+            trigger_hit = False
+            if intent.is_bullish:
+                if candle.high >= intent.breakeven_trigger_price:
+                    trigger_hit = True
+            else:
                 if candle.low <= intent.breakeven_trigger_price:
-                    pos.current_stop_loss = intent.breakeven_target_price
-                    pos.breakeven_activated = True
-            
-            hit_sl = candle.high >= pos.current_stop_loss
-            hit_tp = candle.low <= intent.take_profit
-            
-        # 2. Strict CCTA constraints for Gray Candles (worst-case assumption)
-        if hit_sl and hit_tp:
-            # Both levels hit in a single bar. Assume Stop Loss was struck first per safety rules.
-            self._close_position(candle, pos, is_win=False)
-        elif hit_sl:
-            self._close_position(candle, pos, is_win=False)
-        elif hit_tp:
+                    trigger_hit = True
+                    
+            if trigger_hit:
+                pos.breakeven_activated = True
+                sl = intent.breakeven_target_price
+                pos.current_stop_loss = sl
+                
+        # INTRA-BAR GRANULARITY FIX
+        # If BOTH extremes were breached in the exact same 1-min candle, we use the candle polarity
+        # to guess the sequence of traversal.
+        tp_hit = False
+        sl_hit = False
+        
+        if high_breach and low_breach:
+            if candle.is_bullish:
+                # Opened low, closed high. It means it went down first, then up.
+                if intent.is_bullish:
+                    sl_hit = True
+                else:
+                    tp_hit = True
+            else:
+                # Bearish candle: Open -> High -> Low -> Close.
+                if intent.is_bullish:
+                    tp_hit = True
+                else:
+                    sl_hit = True
+        else:
+            if intent.is_bullish:
+                tp_hit = high_breach
+                sl_hit = low_breach
+            else:
+                tp_hit = low_breach
+                sl_hit = high_breach
+                
+        if tp_hit:
             self._close_position(candle, pos, is_win=True)
+        elif sl_hit:
+            self._close_position(candle, pos, is_win=False)
 
     def _close_position(self, candle: Candle, pos: ActivePosition, is_win: bool) -> None:
         intent = pos.intent
@@ -123,7 +206,7 @@ class BacktestSimulator:
         record = TradeRecord(
             strategy_id=intent.strategy_id,
             is_bullish=intent.is_bullish,
-            entry_time=intent.timestamp, # Record intent generation time
+            entry_time=pos.fill_time, # Record ACTUAL broker fill time 
             exit_time=candle.timestamp,
             entry_price=intent.entry_price,
             stop_loss=pos.current_stop_loss,
