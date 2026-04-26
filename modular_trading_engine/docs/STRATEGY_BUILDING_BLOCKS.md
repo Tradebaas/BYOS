@@ -61,11 +61,11 @@ Dit is de kluiswachter die het risico afdicht zodra álle voorgaande modules gro
 ## 4. Tick vs Point Architectuur
 In `FleetCommander` definiëren we alles rond de NQ-Emini strict in `Ticks` via de JSON bestanden, terwijl de backend Python engine dit naar drijvende komma's `Points` rekent via het `tick_size` profiel.
 * **Aanname Engine:** `/NQ` heeft `tick_size: 0.25`.
-* **Conversie L3:** `64 ticks SL * 0.25 = 16.0 full points`.
+* **Conversie L3:** `48 ticks SL * 0.25 = 12.0 full points`.
 
-Als een Long Hold Level op `20000.0` gecalculeerd wordt met een `entry_frontrun_ticks = 4`:
-* **Entry:** `20000.0 + (4 * 0.25) = 20001.0`
-* **SL:** `20001.0 - (64 * 0.25) = 19985.0`
-* **TP:** `20001.0 + (80 * 0.25) = 20021.0`
+Als een Long Hold Level op `20000.0` gecalculeerd wordt met een `entry_frontrun_ticks = 12`:
+* **Entry:** `20000.0 + (12 * 0.25) = 20003.0`
+* **SL:** `20003.0 - (48 * 0.25) = 19991.0`
+* **TP:** `20003.0 + (48 * 0.25) = 20015.0`
 
 > Dit garandeert dat *elke module onafhankelijk, wiskundig zuiver en identificeerbaar is.* Geen slordige spaghetti, maar strak aangedraaide ratchets.

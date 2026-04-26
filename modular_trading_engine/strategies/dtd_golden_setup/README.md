@@ -71,7 +71,7 @@ Hier smelten het Test Blok (`anchor`) en het Executie Blok (`b2`) samen tot éé
 
 ### Fase 4: Premium / Discount Berekening
 Een confirmed setup mag in deze strategie *uitsluitend* gehandeld worden in een voordelige marktrange.
-*   **Regel:** De Engine haalt de actuele local top & bottom op over de laatste `premium_discount_window_size` (standaard **60 minuten/candles** in playbook). 
+*   **Regel:** De Engine haalt de actuele local top & bottom op over de laatste `premium_discount_window_size` (standaard **150 minuten/candles** in playbook). 
 *   **Uitsluiting:** Formeert zich een Short (sell) setup in de onderste helft (Discount zone)? Genegeerd. Formeert zich een Buy setup in de bovenste helft (Premium zone)? Genegeerd. Enkel met de marktrichting mee wordt geaccepteerd.
 
 ### Fase 5: Simulatielock
@@ -99,7 +99,7 @@ Aan dit punt kunnen alleen nog gevalideerde, actieve limit blocken op The Golden
 **Configuratie via:** `strategy_playbook.json -> TTLTimeout`
 
 *   **Regel:** Setups op de NQ die al lang wachten verkleinen significant de risk/reward ratios naarmate liquiditeit wegsijpelt of poolt. De Hold Level mag ten tijde van evaluatie in minuten vergeleken met nú nooit ouder zijn dan `max_candles_open`.
-*   In `strategy_playbook.json` staat deze op **10 minuten** harde cut-off. Als het Hold blok 11 minuten oud wordt voordat we kunnen traden => Cancel en negeer.
+*   In `strategy_playbook.json` staat deze op **15 minuten** harde cut-off. Als het Hold blok 16 minuten oud wordt voordat we kunnen traden => Cancel en negeer.
 
 ---
 
@@ -112,8 +112,8 @@ Als *alles* hier succesvol door resulteert volgt finalisatie van Limit, Stoploss
 
 De instellingen in het configuratie-bestand worden letterlijk en puur abstract gepompt:
 *   **Tekenformaat (`tick_size`):** 0.25 pt (MNQ/NQ specificeert 4 ticks per punt).
-*   **Absoluut Entry / Frontrunning (`entry_frontrun_ticks`):** 8 ticks = 2 volle index punten. De frontrun baseert the Limit placement op de OPEN van je Hold Level met compensatie the right way (Short Limit ligt -2.0 punten onder de Open; Long Limit staat +2.0 punten op de body) om volume-fills te waarborgen.
-*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (15.0 pts / 60 ticks) en `absolute_tp_points` (10.0 pts / 40 ticks). Waarden voor Stop loss padding en dergelijke zijn hier in deze DTD Golden variant momenteel compleet genegeerd door deze hardcode overwrite in je playbook.
+*   **Absoluut Entry / Frontrunning (`entry_frontrun_ticks`):** 12 ticks = 3.0 volle index punten. De frontrun baseert the Limit placement op de OPEN van je Hold Level met compensatie the right way (Short Limit ligt -3.0 punten onder de Open; Long Limit staat +3.0 punten op de body) om volume-fills te waarborgen.
+*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (12.0 pts / 48 ticks) en `absolute_tp_points` (12.0 pts / 48 ticks). Waarden voor Stop loss padding en dergelijke zijn hier in deze DTD Golden variant momenteel compleet genegeerd door deze hardcode overwrite in je playbook.
 
 ### Samengevat
 Als alles slaagt en dit resulteert in output, pakt het script 1 (De FleetCommander) precies dat Entry (met frontrun), dat Stop Loss en die Take Profit, lockt het setup path, en vuurt die 3-traps raket als één geverifieerd Topstep Bracket naar je portfolio voor onmiddellijke afhandeling.
