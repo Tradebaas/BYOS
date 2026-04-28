@@ -297,7 +297,7 @@ class LiveFleetCommander:
     async def run_forever(self):
         # 1. Warm-up phase (Local CSV -> API Gap Sync)
         logger.info("Fleet Commander: Warming up internal TheoryEngine from historical DB...")
-        csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "historical" / "NQ_1min.csv"
+        csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "backtest" / "candles" / "NQ_1min.csv"
         
         # Start background CSV worker to decouple I/O bottlenecks
         asyncio.create_task(self._csv_queue_worker(csv_path))
@@ -420,15 +420,4 @@ class LiveFleetCommander:
                 logger.error(f"Error in main orchestration loop: {e}")
                 await asyncio.sleep(5) # Delay on error before retry
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='Live Fleet Commander Orchestrator')
-    parser.add_argument('--strategy', type=str, help='Name of the strategy pod (e.g., dtd_golden_setup)', default=None)
-    args = parser.parse_args()
 
-    commander = LiveFleetCommander(strategy_name=args.strategy)
-    asyncio.run(commander.initialize())
-    try:
-        asyncio.run(commander.run_forever())
-    except KeyboardInterrupt:
-        logger.info("Fleet Commander terminated by user.")

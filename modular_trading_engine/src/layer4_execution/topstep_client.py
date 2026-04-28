@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests
 import logging
 import time
 import urllib.parse
@@ -22,7 +22,7 @@ class TopstepClient:
     def __init__(self, credentials: TopstepCredentials, tick_size: float = 0.25):
         self.credentials = credentials
         self.tick_size = tick_size
-        self._session = requests.Session()
+        self._session = requests.Session(impersonate="chrome120")
         self._session.headers.update({
             "Authorization": f"Bearer {self.credentials.jwt_token}",
             "Content-Type": "application/json",

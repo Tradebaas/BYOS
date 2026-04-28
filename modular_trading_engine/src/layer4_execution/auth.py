@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import random
 from playwright.async_api import async_playwright
 from dotenv import load_dotenv
 
@@ -56,16 +57,19 @@ async def fetch_topstepx_jwt() -> str:
             await page.goto("https://topstepx.com/login", timeout=30000)
             
             # Formulier met data invullen
-            logger.info("Muur doorbroken. Aanmeldformulier invullen...")
+            logger.info("Muur doorbroken. Aanmeldformulier invullen met menselijke typsnelheid...")
             
             # Let op: de selectors die TSX gebruikt zijn name="userName" en name="password"
             await page.wait_for_selector('input[name="userName"]', timeout=15000)
-            await page.fill('input[name="userName"]', username)
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+            await page.type('input[name="userName"]', username, delay=random.randint(50, 150))
             
             await page.wait_for_selector('input[name="password"]', timeout=15000)
-            await page.fill('input[name="password"]', password)
+            await asyncio.sleep(random.uniform(0.3, 0.8))
+            await page.type('input[name="password"]', password, delay=random.randint(50, 150))
             
             logger.info("👆 Klikken op Inloggen...")
+            await asyncio.sleep(random.uniform(0.2, 0.7))
             # Vaak werkt een ENTER op het wachtwoord veld het best
             await page.press('input[name="password"]', 'Enter')
             

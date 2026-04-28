@@ -14,7 +14,7 @@
   ],
   "global_settings": {
     "dry_run_mode": false,
-    "poll_interval_sec": 10,
+    "poll_interval_sec": 5,
     "wakeup_resync_enabled": true
   }
 }
