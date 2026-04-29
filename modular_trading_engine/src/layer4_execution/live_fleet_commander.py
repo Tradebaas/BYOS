@@ -48,6 +48,15 @@ class AccountManager:
         self.last_ordered_setup_price = None
         self.last_ordered_setup_direction = None
         self.active_trade_log = None # Tracks open position for CSV ledger
+        self.cached_intents = []
+        
+        # Used for passing last trade result cleanly to the Rule Engine
+        self.pending_last_trade_result = None
+        self.pending_last_trade_is_bullish = None
+        
+        self.active_be_trigger_price = None
+        self.active_be_target_price = None
+        self.active_be_direction = None
         
     async def get_positions_and_orders(self):
         """
@@ -79,21 +88,45 @@ class AccountManager:
             logger.error(f"Failed to fetch state for account {self.account_id}: {e}")
             return [], []
 
-    async def _manage_breakeven(self, positions, orders):
+    async def _manage_breakeven(self, positions, orders, live_price: float):
         """
         Break-Even Poller:
-        Checks if TP1 was filled (e.g. position size went from 4 to 2).
+        Checks if the live price has crossed the active_be_trigger_price.
         If yes, and SL is not at BE, modify the SL.
-        As the API modification endpoint isn't fully defined in legacy client,
-        we outline the logic to PUT /api/Order/ or cancel/flatten.
         """
-        # TODO: Implement exact REST payload for moving SL based on Topstep capabilities.
-        # Topstep API typically handles order replacement/modification via PUT /api/Order
-        pass
+        if self.active_be_trigger_price is None or self.active_be_target_price is None or self.active_be_direction is None:
+            return
 
-    async def execute_cycle(self, latest_candle: Candle):
+        # Check if crossed
+        crossed = False
+        if self.active_be_direction == "LONG" and live_price >= self.active_be_trigger_price:
+            crossed = True
+        elif self.active_be_direction == "SHORT" and live_price <= self.active_be_trigger_price:
+            crossed = True
+
+        if crossed:
+            # Find the working stop loss order
+            working_sl_orders = [o for o in orders if o.get("status") in [1, "Working", "Pending"] and o.get("type") in [3, 4] and not o.get("isTakeProfit")]
+            for sl_order in working_sl_orders:
+                order_id = sl_order.get("id")
+                current_stop = sl_order.get("stopPrice")
+                
+                # Check if it's already moved (prevent spamming API)
+                if current_stop != self.active_be_target_price:
+                    logger.info(f"Account {self.account_id}: Breakeven Triggered at {live_price}! Moving SL from {current_stop} to {self.active_be_target_price}")
+                    success = self.client.modify_order(order_id, self.active_be_target_price, is_stop=True)
+                    if success:
+                        logger.info(f"Account {self.account_id}: Successfully moved SL to breakeven.")
+                        # Reset so we don't trigger again for this position
+                        self.active_be_trigger_price = None
+                    else:
+                        logger.error(f"Account {self.account_id}: Failed to move SL to breakeven.")
+
+    async def execute_cycle(self, latest_candle: Candle, live_price: float = None, is_new_minute: bool = False):
         if not self.is_active:
             return
+
+        live_price = live_price or latest_candle.close
 
         # 1. Resync State
         positions, orders = await self.get_positions_and_orders()
@@ -137,16 +170,24 @@ class AccountManager:
                     exit_price=closed_price,
                     tick_size=self.client.tick_size
                 )
+                
+                # Cache the result to pass to Rule Engine on the next candle
+                direction = self.active_trade_log["direction"]
+                entry_price = self.active_trade_log["entry_price"]
+                if direction == "LONG":
+                    self.pending_last_trade_result = closed_price - entry_price
+                else:
+                    self.pending_last_trade_result = entry_price - closed_price
+                self.pending_last_trade_is_bullish = (direction == "LONG")
+                
                 self.active_trade_log = None
+                self.active_be_trigger_price = None
+                self.active_be_target_price = None
+                self.active_be_direction = None
 
         # 2. Break-Even Management on active positions
         if active_pos:
-            size_remaining = abs(active_pos.get("positionSize", 0))
-            # If we had 4 contracts originally and now have 2, TP1 hit!
-            if size_remaining == 2:
-                # We need to move SL to BE
-                await self._manage_breakeven(positions, orders)
-                
+            await self._manage_breakeven(positions, orders, live_price)
             # If we are in a position, we do not place new entries.
             return
             
@@ -156,10 +197,19 @@ class AccountManager:
         # We assume if we have working limits, we shouldn't place more.
         working_entry_orders = [o for o in orders if o.get("status") in [1, "Working", "Pending"] and o.get("type", 1) == 1 and not o.get("isStop")]
 
-        # Evaluate rule engine intents
-        intents = self.rule_engine.evaluate(theory_state=self.theory_state, timestamp=latest_candle.timestamp)
+        # Evaluate rule engine intents on new minute closes
+        if is_new_minute:
+            self.cached_intents = self.rule_engine.evaluate(
+                theory_state=self.theory_state, 
+                timestamp=latest_candle.timestamp,
+                last_trade_result=self.pending_last_trade_result,
+                last_trade_is_bullish=self.pending_last_trade_is_bullish
+            )
+            # Clear them so they only apply to the exact candle after the trade closed
+            self.pending_last_trade_result = None
+            self.pending_last_trade_is_bullish = None
         
-        active_intent = intents[-1] if intents else None
+        active_intent = self.cached_intents[-1] if self.cached_intents else None
         current_setup_price = active_intent.entry_price if active_intent else None
 
         # 3. Check for Pending Entries & Handle Cancellation
@@ -198,6 +248,12 @@ class AccountManager:
             # Lock the setup to prevent spam
             self.last_ordered_setup_price = active_intent.entry_price
             self.last_ordered_setup_direction = active_intent.is_bullish
+            
+            # Save breakeven targets from intent
+            if hasattr(active_intent, 'breakeven_trigger_price') and active_intent.breakeven_trigger_price:
+                self.active_be_trigger_price = active_intent.breakeven_trigger_price
+                self.active_be_target_price = active_intent.breakeven_target_price
+                self.active_be_direction = direction
 
 
 class LiveFleetCommander:
@@ -297,7 +353,7 @@ class LiveFleetCommander:
     async def run_forever(self):
         # 1. Warm-up phase (Local CSV -> API Gap Sync)
         logger.info("Fleet Commander: Warming up internal TheoryEngine from historical DB...")
-        csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "historical" / "NQ_1min.csv"
+        csv_path = Path(root_dir) / "modular_trading_engine" / "data" / "backtest" / "candles" / "NQ_1min.csv"
         
         # Start background CSV worker to decouple I/O bottlenecks
         asyncio.create_task(self._csv_queue_worker(csv_path))
@@ -409,10 +465,13 @@ class LiveFleetCommander:
                             
                         org_info = f"Tracked Origins (300-Window): {len(active_orgs)}"
                         logger.info(f"❤️ Heartbeat | Processed candle {dt_str} UTC | Price: {bar.close} | {org_info}")
-                        
-                        # Run Strategy Checks
-                        for acc in self.accounts:
-                            await acc.execute_cycle(bar)
+                
+                # Asynchronous evaluation for breakeven and entries
+                if recent_bars:
+                    live_candle = recent_bars[-1]
+                    live_price = live_candle.close
+                    for acc in self.accounts:
+                        await acc.execute_cycle(live_candle, live_price=live_price, is_new_minute=bool(new_bars))
                 
                 await asyncio.sleep(interval)
                 
@@ -420,15 +479,4 @@ class LiveFleetCommander:
                 logger.error(f"Error in main orchestration loop: {e}")
                 await asyncio.sleep(5) # Delay on error before retry
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='Live Fleet Commander Orchestrator')
-    parser.add_argument('--strategy', type=str, help='Name of the strategy pod (e.g., dtd_golden_setup)', default=None)
-    args = parser.parse_args()
 
-    commander = LiveFleetCommander(strategy_name=args.strategy)
-    asyncio.run(commander.initialize())
-    try:
-        asyncio.run(commander.run_forever())
-    except KeyboardInterrupt:
-        logger.info("Fleet Commander terminated by user.")

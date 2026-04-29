@@ -1,4 +1,4 @@
-import requests
+from curl_cffi import requests
 import logging
 import time
 import urllib.parse
@@ -22,7 +22,7 @@ class TopstepClient:
     def __init__(self, credentials: TopstepCredentials, tick_size: float = 0.25):
         self.credentials = credentials
         self.tick_size = tick_size
-        self._session = requests.Session()
+        self._session = requests.Session(impersonate="chrome120")
         self._session.headers.update({
             "Authorization": f"Bearer {self.credentials.jwt_token}",
             "Content-Type": "application/json",
@@ -273,6 +273,34 @@ class TopstepClient:
             return response.ok
         except Exception as e:
             logger.error(f"Failed to cancel order {order_id}: {e}")
+            return False
+
+    def modify_order(self, order_id: int, new_price: float, is_stop: bool = True) -> bool:
+        """
+        Modifies a working order in TopstepX.
+        Specifically designed to update the StopLoss bracket to a new breakeven price.
+        Uses POST /Order/replace.
+        """
+        payload = {
+            "accountId": self.credentials.account_id,
+            "orderId": order_id,
+        }
+        
+        # Voor Stop Market orders gebruiken we 'stopPrice', voor limits 'limitPrice'
+        if is_stop:
+            payload["stopPrice"] = new_price
+        else:
+            payload["limitPrice"] = new_price
+            
+        try:
+            # We assume TopstepX uses /Order/modify for modifications.
+            response = self._session.post(f"{self.BASE_URL}/Order/modify", json=payload)
+            if not response.ok:
+                logger.error(f"Failed to modify order {order_id}. HTTP {response.status_code}: {response.text}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Exception during order modification for {order_id}: {e}")
             return False
 
     def cancel_all_orders(self, base_symbol: str = "NQ") -> bool:

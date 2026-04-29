@@ -1,6 +1,7 @@
 from src.layer3_strategy.modules.base import BaseStrategyModule
 from src.layer3_strategy.pipeline_context import PipelineContext
 from src.layer3_strategy.models import OrderIntent
+import logging
 
 class RATLimitOrder(BaseStrategyModule):
     """
@@ -45,7 +46,13 @@ class RATLimitOrder(BaseStrategyModule):
                 
                 breakeven_trigger = None
                 breakeven_target = None
-                if breakeven_trigger_rr is not None:
+                breakeven_trigger_points = self.params.get('breakeven_trigger_points')
+                breakeven_target_points = self.params.get('breakeven_target_points', 0.0)
+                
+                if breakeven_trigger_points is not None:
+                    breakeven_trigger = entry_price + breakeven_trigger_points
+                    breakeven_target = entry_price + breakeven_target_points
+                elif breakeven_trigger_rr is not None:
                     trigger_dist = (take_profit - entry_price) * breakeven_trigger_rr
                     breakeven_trigger = entry_price + trigger_dist
                     breakeven_target = entry_price + (breakeven_offset_ticks * tick)
@@ -69,7 +76,13 @@ class RATLimitOrder(BaseStrategyModule):
                 
                 breakeven_trigger = None
                 breakeven_target = None
-                if breakeven_trigger_rr is not None:
+                breakeven_trigger_points = self.params.get('breakeven_trigger_points')
+                breakeven_target_points = self.params.get('breakeven_target_points', 0.0)
+                
+                if breakeven_trigger_points is not None:
+                    breakeven_trigger = entry_price - breakeven_trigger_points
+                    breakeven_target = entry_price - breakeven_target_points
+                elif breakeven_trigger_rr is not None:
                     trigger_dist = (entry_price - take_profit) * breakeven_trigger_rr
                     breakeven_trigger = entry_price - trigger_dist
                     breakeven_target = entry_price - (breakeven_offset_ticks * tick)
@@ -85,5 +98,5 @@ class RATLimitOrder(BaseStrategyModule):
                 breakeven_trigger_price=breakeven_trigger,
                 breakeven_target_price=breakeven_target
             )
-            print(f"[{context.timestamp}] Generated {'Long' if level.is_bullish else 'Short'} intent: ep={entry_price} sl={stop_loss} tp={take_profit} ts={level.timestamp}")
+            logging.debug(f"[{context.timestamp}] Generated {'Long' if level.is_bullish else 'Short'} intent: ep={entry_price} sl={stop_loss} tp={take_profit} ts={level.timestamp}")
             context.intents.append(intent)

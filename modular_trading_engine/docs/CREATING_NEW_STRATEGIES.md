@@ -71,3 +71,17 @@ PYTHONPATH=. ./venv/bin/python3 src/layer4_execution/live_fleet_commander.py --s
 *(Merk op dat je `--strategy {naam_van_de_map}` in geeft! De engine nestelt zich vervolgens zelf in dít mapje om de configuraties op the slokken).*
 
 💡 **Pro-Tip**: Je kunt nu zonder problemen twee terminalvensters naast elkaar draaien in je IDE. Eentje start de eerste base strategie, de andere start de NQ Session Sweep. De "Fleet" van Commanders handelt parallel aan elkaar, elk gedreven door zijn eigen strikt gescheiden theorie en account instellingen!
+
+---
+
+## Stap 5: Valideer met de Backtester (Aanbevolen)
+Voordat je live gaat, draai je de strategie eerst door de offline simulator om de verwachte PnL en Win-Rate te valideren:
+
+```bash
+cd modular_trading_engine
+python3 scripts/backtest/run_backtest.py --strategy nq_session_sweep --days 30
+```
+
+De backtester gebruikt exact dezelfde Layer 2 & 3 logica als de Live Bot — alleen Layer 4 (de broker) wordt vervangen door een lokale fast-forward simulator. Zie [BACKTEST_ARCHITECTURE.md](BACKTEST_ARCHITECTURE.md) voor de volledige documentatie.
+
+> **Regel:** Experimenteer nooit blind met productie-accounts. Valideer eerst offline, draai eventueel tick-data replay voor nauwkeurigheid, en ga pas live wanneer de cijfers kloppen.

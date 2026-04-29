@@ -1,10 +1,10 @@
 {
   "accounts": [
     {
-      "account_id": 22070024,
-      "account_name": "EXPRESS-V2-207303-83192519",
+      "account_id": 21637882,
+      "account_name": "100KTC-V2-207303-14439249",
       "symbol": "NQ",
-      "order_size": 1,
+      "order_size": 2,
       "is_active": true,
       "max_positions": 1,
       "strategies": [
@@ -14,7 +14,7 @@
   ],
   "global_settings": {
     "dry_run_mode": false,
-    "poll_interval_sec": 10,
+    "poll_interval_sec": 5,
     "wakeup_resync_enabled": true
   }
 }

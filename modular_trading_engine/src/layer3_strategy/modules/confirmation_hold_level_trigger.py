@@ -57,12 +57,14 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                         break
                 
                 if hard_close_idx != -1:
+                    block_high = max(history[k].high for k in range(i, hard_close_idx + 1))
                     blocks.append({
                         'type': 'short',
                         'hold_front': c1.low,
                         'hold_back': c1.high,
                         'hold_entry': c1.open,
                         'break': c2.high,
+                        'block_extreme': block_high,
                         'c1_idx': i,
                         'hc_idx': hard_close_idx
                     })
@@ -87,12 +89,14 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                         break
                         
                 if hard_close_idx != -1:
+                    block_low = min(history[k].low for k in range(i, hard_close_idx + 1))
                     blocks.append({
                         'type': 'long',
                         'hold_front': c1.high,
                         'hold_back': c1.low,
                         'hold_entry': c1.open,
                         'break': c2.low,
+                        'block_extreme': block_low,
                         'c1_idx': i,
                         'hc_idx': hard_close_idx
                     })
@@ -169,6 +173,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
             for anchor in active_anchors:
                 was_invalidated = False
                 found_test = -1
+                enable_deep_dive = self.params.get('enable_deep_dive_invalidation', False)
                 
                 # Check the gap between this anchor's last checked index and the new block's C1
                 for k in range(anchor['last_checked_idx'] + 1, b['c1_idx'] + 1):
@@ -188,6 +193,17 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                             break
                         if ck.low <= anchor['hold_front'] and k > locked_until_idx:
                             found_test = k
+                            
+                # Deep Dive Invalidation: Invalidates setup if price breaches the block's absolute extreme
+                if not was_invalidated and enable_deep_dive:
+                    for k in range(anchor['last_checked_idx'] + 1, b['hc_idx'] + 1):
+                        ck = history[k]
+                        if not is_bullish and ck.high >= anchor['block_extreme']:
+                            was_invalidated = True
+                            break
+                        if is_bullish and ck.low <= anchor['block_extreme']:
+                            was_invalidated = True
+                            break
                             
                 if was_invalidated:
                     continue # Anchor dies (hard close)
@@ -279,7 +295,7 @@ class ConfirmationHoldLevelTrigger(BaseStrategyModule):
                 # Actually our iterative `simulate_trade_lock` proves it's valid.
                 
                 level_data = TheoryLevel(
-                    timestamp=context.timestamp,
+                    timestamp=history[latest_valid_setup['hc_idx']].timestamp,
                     level_type=LevelType.HOLD_LEVEL,
                     is_bullish=is_bullish,
                     price_high=latest_valid_setup['break'], 

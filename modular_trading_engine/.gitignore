@@ -3,3 +3,17 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
+venv/
+
+# Experiment output (keep scripts, ignore dumps)
+.tmp_optimize/*.log
+.tmp_optimize/*.txt
+.tmp_optimize/*.out
+
+# Data & DB files
+*.db
+data/tick_recordings/
+
+# Legacy optimizer log
+optimizer.log
+output.txt

@@ -28,12 +28,24 @@
                         "end_minute": 40
                     },
                     {
+                        "start_hour": 12,
+                        "start_minute": 0,
+                        "end_hour": 13,
+                        "end_minute": 0
+                    },
+                    {
                         "start_hour": 15,
                         "start_minute": 49,
                         "end_hour": 18,
                         "end_minute": 0
                     }
                 ]
+            }
+        },
+        {
+            "module_type": "LossCooldownFilter",
+            "params": {
+                "cooldown_minutes": 30
             }
         },
         {
@@ -49,7 +61,9 @@
                 "entry_frontrun_ticks": 12,
                 "stop_loss_padding_ticks": 0,
                 "absolute_sl_points": 12.0,
-                "absolute_tp_points": 12.0
+                "absolute_tp_points": 12.0,
+                "breakeven_trigger_rr": 0.5,
+                "breakeven_offset_ticks": 2
             }
         }
     ]

@@ -30,12 +30,15 @@ class RuleEngine:
                 
             self.pipeline_modules.append(module_class(params=params_copy))
 
-    def evaluate(self, theory_state: MarketTheoryState, timestamp: datetime) -> List[OrderIntent]:
+    def evaluate(self, theory_state: MarketTheoryState, timestamp: datetime, 
+                 last_trade_result: float = None, last_trade_is_bullish: bool = None) -> List[OrderIntent]:
         """
         Runs the full modular pipeline on the currently active MarketTheoryState.
         Each module mutates the context, with the final module appending OrderIntents.
         """
         context = PipelineContext(theory_state=theory_state, timestamp=timestamp)
+        context.last_trade_result = last_trade_result
+        context.last_trade_is_bullish = last_trade_is_bullish
         
         for module in self.pipeline_modules:
             module.process(context)
