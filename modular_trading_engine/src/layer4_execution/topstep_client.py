@@ -275,6 +275,34 @@ class TopstepClient:
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
+    def modify_order(self, order_id: int, new_price: float, is_stop: bool = True) -> bool:
+        """
+        Modifies a working order in TopstepX.
+        Specifically designed to update the StopLoss bracket to a new breakeven price.
+        Uses POST /Order/replace.
+        """
+        payload = {
+            "accountId": self.credentials.account_id,
+            "orderId": order_id,
+        }
+        
+        # Voor Stop Market orders gebruiken we 'stopPrice', voor limits 'limitPrice'
+        if is_stop:
+            payload["stopPrice"] = new_price
+        else:
+            payload["limitPrice"] = new_price
+            
+        try:
+            # We assume TopstepX uses /Order/replace for modifications.
+            response = self._session.post(f"{self.BASE_URL}/Order/replace", json=payload)
+            if not response.ok:
+                logger.error(f"Failed to modify order {order_id}. HTTP {response.status_code}: {response.text}")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"Exception during order modification for {order_id}: {e}")
+            return False
+
     def cancel_all_orders(self, base_symbol: str = "NQ") -> bool:
         """
         Annuleert alle pending (working) entry orders op dit account/target om state schoon te vegen.

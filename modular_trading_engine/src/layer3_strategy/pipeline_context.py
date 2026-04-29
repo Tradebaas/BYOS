@@ -13,6 +13,10 @@ class PipelineContext:
         self.theory_state = theory_state
         self.timestamp = timestamp
         
+        # Last closed trade info (injected by Layer 4 Execution)
+        self.last_trade_result: Optional[float] = None
+        self.last_trade_is_bullish: Optional[bool] = None
+        
         # Collaborative variables set by modules
         self.active_polarity_is_bullish: Optional[bool] = None
         

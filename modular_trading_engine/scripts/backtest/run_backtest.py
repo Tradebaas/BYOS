@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import pandas as pd
+import logging
 from datetime import datetime, timedelta, timezone
 
 # Ensure engine root is on sys.path (works from any CWD)
@@ -27,31 +28,33 @@ def main():
     
     args = parser.parse_args()
     
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    
     strategy_dir = f"strategies/{args.strategy}"
     playbook_path = f"{strategy_dir}/strategy_playbook.json"
     
     if not os.path.exists(playbook_path):
-        print(f"Error: Strategie playbook niet gevonden op {playbook_path}")
+        logging.error(f"Error: Strategie playbook niet gevonden op {playbook_path}")
         sys.exit(1)
         
-    print(f"🚀 Initializing Backtest Engine voor '{args.strategy}'...")
-    print(f"⚙️ Config: {playbook_path}")
+    logging.info(f"🚀 Initializing Backtest Engine voor '{args.strategy}'...")
+    logging.info(f"⚙️ Config: {playbook_path}")
     
     now = datetime.now(timezone.utc)
     start_date = now - timedelta(days=args.days)
     
     data_path = "data/backtest/candles/NQ_1min.csv"
     if not os.path.exists(data_path):
-        print(f"Error: Historische data niet gevonden op {data_path}. Run build_data_lake.py eerst.")
+        logging.error(f"Error: Historische data niet gevonden op {data_path}. Run build_data_lake.py eerst.")
         sys.exit(1)
         
-    print(f"📊 Laden van historische data uit {data_path} (laatste {args.days} dagen)...")
+    logging.info(f"📊 Laden van historische data uit {data_path} (laatste {args.days} dagen)...")
     df = pd.read_csv(data_path)
     df['datetime'] = pd.to_datetime(df['timestamp_ms'], unit='ms', utc=True)
     df = df[(df['datetime'] >= start_date) & (df['datetime'] <= now)]
     
-    print(f"✅ Data geladen: {len(df)} candles.")
-    print("⏳ Running Fast-Forward Simulation...")
+    logging.info(f"✅ Data geladen: {len(df)} candles.")
+    logging.info("⏳ Running Fast-Forward Simulation...")
     
     # Inladen van GSD Layer architectuur
     cfg = ConfigParser.load_playbook(playbook_path)
@@ -63,6 +66,7 @@ def main():
     
     last_ordered_setup_price = None
     last_ordered_setup_direction = None
+    last_trade_count = 0
     
     for i, row in df.iterrows():
         c = Candle(
@@ -77,12 +81,22 @@ def main():
         sim.process_candle(c)
         state.process_candle(c)
         
+        # Determine if a trade was closed in the previous cycle
+        current_trade_count = len(vault.trades)
+        last_trade_result = None
+        last_trade_is_bullish = None
+        if current_trade_count > last_trade_count:
+            last_closed_trade = vault.trades[-1]
+            last_trade_result = last_closed_trade.pnl_points
+            last_trade_is_bullish = last_closed_trade.is_bullish
+            last_trade_count = current_trade_count
+            
         # 1. Manage Active Positions - skip new entries if we have a position
         if hasattr(sim, 'active_pos') and sim.active_pos is not None:
              continue
              
         # 2. Evaluate Rule Engine Intents
-        intents = engine.evaluate(state, c.timestamp)
+        intents = engine.evaluate(state, c.timestamp, last_trade_result=last_trade_result, last_trade_is_bullish=last_trade_is_bullish)
         active_intent = intents[-1] if intents else None
         current_setup_price = active_intent.entry_price if active_intent else None
         
@@ -103,7 +117,7 @@ def main():
             last_ordered_setup_price = active_intent.entry_price
             last_ordered_setup_direction = active_intent.is_bullish
             
-    print("\n✅ Validatie Voltooid. Analyseren van Trade Ledger...")
+    logging.info("\n✅ Validatie Voltooid. Analyseren van Trade Ledger...")
     daily_stats = {}
     
     for t in vault.trades:
@@ -126,13 +140,13 @@ def main():
         else:
             daily_stats[day_str]['losses'] += 1
 
-    print("\n| Date | Total Trades | Wins | Losses | Net PnL |")
-    print("|---|---|---|---|---|")
+    logging.info("\n| Date | Total Trades | Wins | Losses | Net PnL |")
+    logging.info("|---|---|---|---|---|")
     for day in sorted(daily_stats.keys()):
         stats = daily_stats[day]
         net = stats['net_pnl']
         color = format_color(net)
-        print(f"| {day} | {stats['trades']} | {stats['wins']} | {stats['losses']} | {color} ${net:.2f} |")
+        logging.info(f"| {day} | {stats['trades']} | {stats['wins']} | {stats['losses']} | {color} ${net:.2f} |")
 
     total_trades = sum(d['trades'] for d in daily_stats.values())
     total_wins = sum(d['wins'] for d in daily_stats.values())
@@ -157,19 +171,19 @@ def main():
         if drawdown > max_drawdown:
             max_drawdown = drawdown
 
-    print("\n==============================================")
-    print("📈 SIMULATIE RAPPORT")
-    print("==============================================")
-    print(f"Strategie:  {args.strategy}")
-    print(f"Config:     {playbook_path}")
-    print(f"Periode:    Laatste {args.days} dagen")
-    print("----------------------------------------------")
-    print(f"Totaal Aantal Trades: {total_trades}")
-    print(f"Win Rate:             {win_rate:.1f}%")
-    print(f"Totaal Netto PnL:     {format_color(total_net)} ${total_net:.2f}")
-    print(f"Slechtste Dag PnL:    🔴 ${worst_day_pnl:.2f}")
-    print(f"Max Drawdown:         🔴 ${max_drawdown:.2f}")
-    print("==============================================\n")
+    logging.info("\n==============================================")
+    logging.info("📈 SIMULATIE RAPPORT")
+    logging.info("==============================================")
+    logging.info(f"Strategie:  {args.strategy}")
+    logging.info(f"Config:     {playbook_path}")
+    logging.info(f"Periode:    Laatste {args.days} dagen")
+    logging.info("----------------------------------------------")
+    logging.info(f"Totaal Aantal Trades: {total_trades}")
+    logging.info(f"Win Rate:             {win_rate:.1f}%")
+    logging.info(f"Totaal Netto PnL:     {format_color(total_net)} ${total_net:.2f}")
+    logging.info(f"Slechtste Dag PnL:    🔴 ${worst_day_pnl:.2f}")
+    logging.info(f"Max Drawdown:         🔴 ${max_drawdown:.2f}")
+    logging.info("==============================================\n")
 
 if __name__ == "__main__":
     main()
