@@ -293,8 +293,8 @@ class TopstepClient:
             payload["limitPrice"] = new_price
             
         try:
-            # We assume TopstepX uses /Order/replace for modifications.
-            response = self._session.post(f"{self.BASE_URL}/Order/replace", json=payload)
+            # We assume TopstepX uses /Order/modify for modifications.
+            response = self._session.post(f"{self.BASE_URL}/Order/modify", json=payload)
             if not response.ok:
                 logger.error(f"Failed to modify order {order_id}. HTTP {response.status_code}: {response.text}")
                 return False
