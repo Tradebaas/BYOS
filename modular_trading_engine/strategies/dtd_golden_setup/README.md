@@ -28,8 +28,9 @@ Dit is de hoofdloop van het systeem en fungeert als de dirigent tussen de Topste
 *   **De Pipeline Volgorde:** 
     1.  `ConfirmationHoldLevelTrigger` (Patroon zoeker)
     2.  `KillzoneFilter` (Tijdsfilter)
-    3.  `TTLTimeout` (Versheidsfilter)
-    4.  `RATLimitOrder` (Uitvoer instector en Order Converter)
+    3.  `LossCooldownFilter` (Revenge-trading blokkade)
+    4.  `TTLTimeout` (Versheidsfilter)
+    5.  `RATLimitOrder` (Uitvoer inspector en Order Converter)
 
 Zodra iets álle filters overleeft, is het een `OrderIntent` (een koop/verkoop beslissing).
 
@@ -89,11 +90,20 @@ Aan dit punt kunnen alleen nog gevalideerde, actieve limit blocken op The Golden
 *   **Tijden van validiteit (`start_hour`/`end_hour`):** 00:00 - 23:59. Dit houdt in dat momenteel theorievorming letterlijk rond de klok reageert op setups.
 *   **Exceptie blokken (`exclude_windows`):**
     *   **Opening:** Van 09:20 tot 09:40 EST. Alle intents sterven onmiddellijk, geen uitvoering toegestaan wegens spread en cash open liquiditeit manipulatie.
-    *   **Sluiting/Vast:** Van 15:50 tot 18:00 EST. Geen pre-market of pre-close carry over toegestaan. Limit orders verdwijnen in dit block als sneeuw voor de zon (wat via de `LiveFleetCommander` resulteert in cancel-all).
+    *   **Lunch:** Van 12:00 tot 13:00 EST. De markt is berucht om wispelturig gedrag en lage liquiditeit in dit uur; we pauzeren nieuwe setups.
+    *   **Sluiting/Vast:** Van 15:49 tot 18:00 EST. Geen pre-market of pre-close carry over toegestaan. Limit orders verdwijnen in dit block als sneeuw voor de zon (wat via de `LiveFleetCommander` resulteert in cancel-all).
 
 ---
 
-## 5. De Versheidsfilter
+## 5. De Wraak-Trade Blokkade (Loss Cooldown)
+
+**Betrokken Script:** `src/layer3_strategy/modules/loss_cooldown_filter.py`
+**Configuratie via:** `strategy_playbook.json -> LossCooldownFilter`
+
+*   **Regel:** Voorkomt zogenaamde revenge-trading. Zodra de bot detecteert dat de vorige trade is afgesloten in een verlies (Stop-Loss geraakt), weigert deze module nieuwe setups goed the keuren gedurende een ingestelde afkoelperiode.
+*   In `strategy_playbook.json` staat deze momenteel op **30 minuten** (`cooldown_minutes: 30`). Dit beschermt het account tegen "chop" of tilt.
+
+## 6. De Versheidsfilter
 
 **Betrokken Script:** `src/layer3_strategy/modules/ttl_timeout.py`
 **Configuratie via:** `strategy_playbook.json -> TTLTimeout`
@@ -103,7 +113,7 @@ Aan dit punt kunnen alleen nog gevalideerde, actieve limit blocken op The Golden
 
 ---
 
-## 6. Het Broker Vertalingsblok (Rejection As Target)
+## 7. Het Broker Vertalingsblok (Rejection As Target)
 
 **Betrokken Script:** `src/layer3_strategy/modules/limit_order_execution.py`
 **Configuratie via:** `strategy_playbook.json -> RATLimitOrder` en `execution_config.json`
@@ -112,8 +122,9 @@ Als *alles* hier succesvol door resulteert volgt finalisatie van Limit, Stoploss
 
 De instellingen in het configuratie-bestand worden letterlijk en puur abstract gepompt:
 *   **Tekenformaat (`tick_size`):** 0.25 pt (MNQ/NQ specificeert 4 ticks per punt).
-*   **Absoluut Entry / Frontrunning (`entry_frontrun_ticks`):** 12 ticks = 3.0 volle index punten. De frontrun baseert the Limit placement op de OPEN van je Hold Level met compensatie the right way (Short Limit ligt -3.0 punten onder de Open; Long Limit staat +3.0 punten op de body) om volume-fills te waarborgen.
-*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (12.0 pts / 48 ticks) en `absolute_tp_points` (12.0 pts / 48 ticks). Waarden voor Stop loss padding en dergelijke zijn hier in deze DTD Golden variant momenteel compleet genegeerd door deze hardcode overwrite in je playbook.
+*   **Absoluut Entry / Frontrunning (`entry_frontrun_ticks`):** 12 ticks = 3.0 volle index punten. De frontrun baseert de Limit placement op de OPEN van je Hold Level met compensatie in the right way (Short Limit ligt -3.0 punten onder de Open; Long Limit staat +3.0 punten op de body) om volume-fills te waarborgen.
+*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (12.0 pts / 48 ticks) en `absolute_tp_points` (12.0 pts / 48 ticks). 
+*   **Breakeven Shield:** Bevat geavanceerd trade management! Met `breakeven_trigger_rr: 0.5` schuift de broker native de stoploss naar je instapprijs (+ `breakeven_offset_ticks: 2` voor fees) zodra de trade halverwege zijn target is (op +6 punten winst in dit geval). Dit dekt je in tegen plotselinge reversals.
 
 ### Samengevat
 Als alles slaagt en dit resulteert in output, pakt het script 1 (De FleetCommander) precies dat Entry (met frontrun), dat Stop Loss en die Take Profit, lockt het setup path, en vuurt die 3-traps raket als één geverifieerd Topstep Bracket naar je portfolio voor onmiddellijke afhandeling.

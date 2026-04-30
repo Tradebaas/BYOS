@@ -101,9 +101,9 @@ Hiervoor is de backtest-architectuur gaandeweg uitgebreid:
 
 ---
 
-## 🧪 6. De `.tmp_optimize` Sandbox Workflow
+## 🧪 6. De `.tmp` Sandbox Workflow
 
-De map `.tmp_optimize/` dient als **wegwerp-sandbox** voor experimentele research. Het bevat:
+De map `.tmp/` dient als **wegwerp-sandbox** voor experimentele research. Het bevat:
 
 | Bestandstype | Voorbeeld | Doel |
 |---|---|---|
@@ -113,7 +113,7 @@ De map `.tmp_optimize/` dient als **wegwerp-sandbox** voor experimentele researc
 | Gespecialiseerde simulators | `trailing_tp_simulator.py`, `time_exit_simulator.py` | Feature-specifieke tests |
 
 **Workflow:**
-1. Kloon het playbook naar een tijdelijke iteratie in `.tmp_optimize/`.
+1. Kloon het playbook naar een tijdelijke iteratie in `.tmp/`.
 2. Draai de theorie af in isolatie.
 3. Produceer een analyse (script-output, terminal metrics).
 4. Trek conclusies (bijv. "De statische 12-punt Stop-Loss functioneert wiskundig beter dan een dynamische").
@@ -129,7 +129,7 @@ Deze regels worden afgedwongen door `tests/test_architecture.py` (pytest-archon)
 1. **Layer-scheiding is heilig:** Layer 1 (Data) → Layer 2 (Theorie) → Layer 3 (Strategie) → Layer 4 (Executie). Lagen mogen **nooit** opwaarts importeren.
 2. **`simulator.py` = Layer 4:** De simulator implementeert de broker-executie interface en leeft daarom in `src/layer4_execution/`.
 3. **Scripts importeren de engine, niet andersom:** De `scripts/` map bevat CLI-wrappers die de engine aanroepen via `sys.path`. De engine zelf weet niets van de scripts.
-4. **Productie-code is read-only tijdens research:** Experimentele scripts in `.tmp_optimize/` mogen **nooit** productiecode wijzigen.
+4. **Productie-code is read-only tijdens research:** Experimentele scripts in `.tmp/` mogen **nooit** productiecode wijzigen.
 
 ---
 

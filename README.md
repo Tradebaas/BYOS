@@ -103,7 +103,7 @@ De backtest omgeving is ontworpen om gigantische datasets te verwerken via termi
 
 > [!CAUTION]
 > **ABSOLUTE REGEL VOOR BACKTESTING:** 
-> Experimenteren, aanpassen van parameters, of theorie-aanpassingen toetsen gebeurt ALTIJD en UITSLUITEND in de `.tmp/` of `.tmp_optimize/` map. **Je mag absoluut NOOIT productie-playbooks of source-code aanpassen puur om even een test te draaien.** Na het draaien van een lokaal experiment ruim je de `.tmp` directory op. Productie is 100% Read-Only!
+> Experimenteren, aanpassen van parameters, of theorie-aanpassingen toetsen gebeurt ALTIJD en UITSLUITEND in de `.tmp/` map. **Je mag absoluut NOOIT productie-playbooks of source-code aanpassen puur om even een test te draaien.** Na het draaien van een lokaal experiment ruim je de `.tmp` directory op. Productie is 100% Read-Only!
 
 ### Een backtest uitvoeren:
 1. **Data ophalen:** Voordat je test, heb je actuele data nodig. Zorg dat je bent ingelogd via de `.env`.
