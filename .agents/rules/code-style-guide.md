@@ -8,7 +8,7 @@ The codebase inside `modular_trading_engine` follows a STRICT architectural mand
 
 ## 1. Zero Tolerance for "Cowboy Coding" & Technical Debt
 - **NO Production File Edits (EVER) without permission**: Je mag absoluut **NOOIT** productie bestanden (zoals `strategy_playbook.json`, levende source-code, applicatie scripts zoals `run_backtest.py`, etc.) aanpassen puur om even een backtest te fixen, data inzichtelijk te maken, of stats toe te voegen, TENZIJ je expliciete toestemming hebt gehaald bij de gebruiker via een plan. Als je playbooks wilt variëren, gebruik dan CLI-overrides of tijdelijke memory state. Productie-code (inclusief alle bestaande scripts) is 100% "Read-Only" tijdens exploratie, analyse en validatie.
-- **BACKTESTING ALTIJD IN `.tmp`**: Experimenteren, backtesten met gemodificeerde playbooks of het testen van nieuwe features gebeurt ALTIJD in de `.tmp` (of `.tmp_optimize`) map. Je mag NOOIT live data of live productiecode aanpassen voor het faciliteren van een test. Na de test ruim je de troep in `.tmp` weer op.
+- **BACKTESTING ALTIJD IN `.tmp` (ABSOLUTE ISOLATION)**: Experimenteren, backtesten met gemodificeerde parameters, of het uittesten van logica-wijzigingen gebeurt ALTIJD en UITSLUITEND in de `.tmp` of `.tmp_optimize` map. Je mag **NOOIT** live productiebestanden (inclusief `src/layer3_strategy/modules/` classes of live json playbooks) aanpassen puur om een backtest of optimalisatie uit te voeren. Moet je een class wijzigen om iets te testen? Maak een KOPIE in `.tmp` en doe het daar. Er is GEEN ENKELE uitzondering op deze regel zonder expliciet `implementation_plan.md` akkoord voor een permanente productie-wijziging.
 - **NO Patch Scripts**: Never create `patch.py`, `debug.py`, `trace.py`, or any arbitrary python scripts to "quickly debug" an issue into the root directory or the `scripts/` directory. All temporary exploration must happen in memory, in `.tmp`, or in isolated, instantly-deleted test files.
 - **NO Leftover Dumps**: Never leave `.txt`, `.csv`, `.log`, or other uncommitted output dumps in the workspace. The master branch is sacred.
 - **Strict Separation of Concerns**: "Layer 1" (Data) -> "Layer 2" (Mathematical Theory) -> "Layer 3" (Strategy Config) -> "Layer 4" (Broker Execution). Layers can **NEVER** import or reference data from layers above them. 
@@ -22,7 +22,12 @@ The codebase inside `modular_trading_engine` follows a STRICT architectural mand
 - **Always Plan**: Before implementing any structural change (especially new modules or architecture level edits), you must use the `implementation_plan.md` artifact workflow and await user authorization.
 - **No Monoliths**: Do not combine responsibilities. Keep functions pure. We rely on the `pytest-archon` verifiers. If you break the imports, the Pre-Commit hook will block your work!
 
-## 4. Communication requirement (De Kanarie)
+## 4. Context Management & Handovers
+- **Geen Context Bloat**: Als een significante taak (zoals een iteratie van backtesting, een refactor, of het bouwen van een nieuwe feature) succesvol is afgerond, mag je NIET in dezelfde chat-sessie doorgaan met een compleet nieuwe taak. Een te grote context-window leidt onherroepelijk tot "Context Fade" en het vergeten van de core-regels (cowboy gedrag).
+- **Verplichte Overdracht (Handover)**: Voordat je een nieuwe grote taak start, of wanneer je merkt dat de chat te lang wordt, ben je **verplicht** aan de gebruiker voor te stellen om een nieuwe AI-agent/chat te openen.
+- **Hoe doe je dit?** Schrijf een heldere samenvatting (bijv. in een `handoff.md` of `task.md`) waarin staat: wat er zojuist bereikt is, wat de huidige state van de applicatie is, en wat de exacte volgende stap is voor de *nieuwe* agent. Adviseer de gebruiker vervolgens om de chat af te sluiten en een nieuwe te starten met deze handover file als context.
+
+## 5. Communication requirement (De Kanarie)
 To mathematically verify that you, the AI, are loading and reading these rules on every interaction, you MUST terminate EVERY single response to the user with the following exact kanarie symbol: 🐤
 
 Failure to append this phrase means you have failed your structural constraints.

@@ -14,7 +14,7 @@ async def main():
     print("🤖 Bezig met onzichtbaar ophalen van JWT token via TopstepX login...")
     jwt_token = await fetch_topstepx_jwt()
     if not jwt_token:
-        print("❌ Fout: Kon geen JWT token intercepten. Controleer TOPSTEPX_USERNAME en TOPSTEPX_PASSWORD in je .env bestand.")
+        print("❌ Fout: Kon geen JWT token intercepten. Controleer TOPSTEP_USERNAME en TOPSTEP_PASSWORD in je .env bestand.")
         return
         
     print("🌐 JWT succesvol onderschept. Accounts opvragen bij interne ProjectX API...")

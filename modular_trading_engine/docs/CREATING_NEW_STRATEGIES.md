@@ -65,7 +65,7 @@ Lanceer de Live Bot als volgt via in de terminal:
 
 ```bash
 cd modular_trading_engine
-PYTHONPATH=. ./venv/bin/python3 src/layer4_execution/live_fleet_commander.py --strategy nq_session_sweep
+PYTHONPATH=. ./venv/bin/python3 scripts/live/run_live_bot.py --strategy nq_session_sweep
 ```
 
 *(Merk op dat je `--strategy {naam_van_de_map}` in geeft! De engine nestelt zich vervolgens zelf in dít mapje om de configuraties op the slokken).*
