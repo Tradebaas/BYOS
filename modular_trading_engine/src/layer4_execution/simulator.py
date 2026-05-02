@@ -22,8 +22,10 @@ class BacktestSimulator:
     Virtual Execution Engine running on M1 Candles.
     Responsible for executing Limit Orders and registering Gray Candles properly.
     """
-    def __init__(self, vault: DataVault):
+    def __init__(self, vault: DataVault, commission_per_contract: float = 7.60, position_size: int = 1):
         self.vault = vault
+        self.commission_per_contract = commission_per_contract
+        self.position_size = position_size
         self.pending_intent: Optional[OrderIntent] = None
         self.active_pos: Optional[ActivePosition] = None
         
@@ -160,25 +162,18 @@ class BacktestSimulator:
                 sl = intent.breakeven_target_price
                 pos.current_stop_loss = sl
                 
-        # INTRA-BAR GRANULARITY FIX
-        # If BOTH extremes were breached in the exact same 1-min candle, we use the candle polarity
-        # to guess the sequence of traversal.
+        # PESSIMISTIC INTRA-BAR RULE:
+        # If BOTH extremes were breached in the exact same 1-min candle, we assume the WORST CASE scenario:
+        # Stop Loss is always hit before Take Profit. 
+        # This completely eliminates look-ahead bias and creates absolute certainty in backtest win rates.
         tp_hit = False
         sl_hit = False
+        same_candle_conflict = False
         
         if high_breach and low_breach:
-            if candle.is_bullish:
-                # Opened low, closed high. It means it went down first, then up.
-                if intent.is_bullish:
-                    sl_hit = True
-                else:
-                    tp_hit = True
-            else:
-                # Bearish candle: Open -> High -> Low -> Close.
-                if intent.is_bullish:
-                    tp_hit = True
-                else:
-                    sl_hit = True
+            same_candle_conflict = True
+            sl_hit = True
+            tp_hit = False
         else:
             if intent.is_bullish:
                 tp_hit = high_breach
@@ -188,11 +183,11 @@ class BacktestSimulator:
                 sl_hit = high_breach
                 
         if tp_hit:
-            self._close_position(candle, pos, is_win=True)
+            self._close_position(candle, pos, is_win=True, same_candle_conflict=same_candle_conflict)
         elif sl_hit:
-            self._close_position(candle, pos, is_win=False)
+            self._close_position(candle, pos, is_win=False, same_candle_conflict=same_candle_conflict)
 
-    def _close_position(self, candle: Candle, pos: ActivePosition, is_win: bool) -> None:
+    def _close_position(self, candle: Candle, pos: ActivePosition, is_win: bool, same_candle_conflict: bool = False) -> None:
         intent = pos.intent
         
         # Dynamic PNL calculation supporting trailing/breakeven stops
@@ -214,7 +209,9 @@ class BacktestSimulator:
             mfe=pos.mfe,
             mae=pos.mae,
             win=is_win,
-            pnl_points=pnl
+            pnl_points=pnl,
+            same_candle_conflict=same_candle_conflict,
+            commission_usd=(self.commission_per_contract * self.position_size)
         )
         
         self.vault.log_trade(record)

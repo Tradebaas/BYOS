@@ -25,6 +25,10 @@ class TradeRecord(BaseModel):
     win: bool
     pnl_points: float # Net points captured or lost
     
+    # Pessimistic backtest flags
+    same_candle_conflict: bool = False
+    commission_usd: float = 0.0
+    
     model_config = ConfigDict(frozen=True)
 
 class DataVault:

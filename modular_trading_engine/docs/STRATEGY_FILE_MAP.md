@@ -65,6 +65,7 @@ TopstepClient.place_oso_order()           ← Layer 4: stuurt de native server-s
 | `src/layer3_strategy/modules/loss_cooldown_filter.py` | Voorkomt revenge-trading met een afkoelperiode na SL |
 | `src/layer3_strategy/modules/ttl_timeout.py` | Controleert de 'versheid' van het theorie-level |
 | `src/layer3_strategy/modules/limit_order_execution.py` | Plaatst limieten (RATLimitOrder) rond theorie levels |
+| `src/layer3_strategy/modules/origin_level_trigger.py` | Trigger specifiek ontworpen voor Origin Level Scalper |
 
 ### Layer 4 — Execution (TopstepX)
 | Bestand | Rol |
@@ -81,8 +82,10 @@ TopstepClient.place_oso_order()           ← Layer 4: stuurt de native server-s
 ### Config
 | Bestand | Rol |
 |---|---|
-| `strategies/dtd_golden_setup/strategy_playbook.json` | De exacte pipeline en hyperparameters |
-| `strategies/dtd_golden_setup/execution_config.json` | Live uitvoeringsinstellingen, Account IDs, Instrument ID |
+| `strategies/dtd_golden_setup/strategy_playbook.json` | De exacte pipeline en hyperparameters voor DTD |
+| `strategies/dtd_golden_setup/execution_config.json` | Live uitvoeringsinstellingen voor DTD |
+| `strategies/origin_level_scalper/strategy_playbook.json` | Pipeline voor de Origin Level Scalper strategie |
+| `strategies/origin_level_scalper/execution_config.json` | Executie configuratie voor Origin Level Scalper |
 | `data/backtest/candles/NQ_1min.csv` | De opgebouwde historical Data Lake voor backtesting en warmup |
 
 ---
@@ -92,7 +95,7 @@ TopstepClient.place_oso_order()           ← Layer 4: stuurt de native server-s
 ### Layer 2
 | Bestand | Reden |
 |---|---|
-| `src/layer2_theory/origin_state_machine.py` | Trackt Origin Levels. **Wordt NERGENS in Layer 3 gebruikt voor executie.** Uitsluitend aanwezig voor Heartbeat statistieken. |
+| `src/layer2_theory/origin_state_machine.py` | Trackt Origin Levels. (Nu wél actief als je `origin_level_scalper` draait, inactief bij `dtd_golden_setup`). |
 
 ---
 

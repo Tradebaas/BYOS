@@ -128,7 +128,7 @@ Een overzicht van het landschap voor als je zelf zaken gaat ontwikkelen in `modu
 *   `/src/layer2_theory/`: De markt-analist. Kijkt naar de bars en ontdekt patronen (`market_state.py`).
 *   `/src/layer3_strategy/`: Vertaalt theorie naar actie. `rule_engine.py` regeert hier.
 *   `/src/layer4_execution/`: Broker connecties (`topstep_client.py`), WebSockets (`topstep_realtime.py`), Live Bot (`live_fleet_commander.py`) en Simulator (`simulator.py`).
-*   `/strategies/<naam>/`: Hier leeft de identiteit van een strategie. (Het `strategy_playbook.json`).
+*   `/strategies/<naam>/`: Hier leeft de identiteit van een strategie (bijv. `dtd_golden_setup` of `origin_level_scalper`).
 *   `/scripts/live/`: Hulpmiddelen en start-scripts voor de live omgeving.
 *   `/scripts/backtest/`: De CLI-interface voor data ophalen en backtesting.
 *   `/docs/`: Diepgaande documentatie!

@@ -23,12 +23,16 @@ class RATLimitOrder(BaseStrategyModule):
         
         absolute_sl_points = self.params.get('absolute_sl_points')
         absolute_tp_points = self.params.get('absolute_tp_points')
+        entry_price_type = self.params.get('entry_price_type', 'open') # 'open' or 'wick'
         
         for tracker in context.setup_candidates:
             level = tracker.level_data
             if level.is_bullish:
                 # LONG SETUP
-                entry_price = level.price_open + (front * tick)
+                if entry_price_type == 'wick':
+                    entry_price = level.price_low + (front * tick)
+                else:
+                    entry_price = level.price_open + (front * tick)
                 
                 if absolute_sl_points is not None and absolute_tp_points is not None:
                     risk = absolute_sl_points
@@ -58,7 +62,10 @@ class RATLimitOrder(BaseStrategyModule):
                     breakeven_target = entry_price + (breakeven_offset_ticks * tick)
             else:
                 # SHORT SETUP
-                entry_price = level.price_open - (front * tick)
+                if entry_price_type == 'wick':
+                    entry_price = level.price_high - (front * tick)
+                else:
+                    entry_price = level.price_open - (front * tick)
                 
                 if absolute_sl_points is not None and absolute_tp_points is not None:
                     risk = absolute_sl_points

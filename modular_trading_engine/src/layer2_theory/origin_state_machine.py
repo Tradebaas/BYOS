@@ -15,16 +15,15 @@ class OriginTracker:
         """
         Initializes the tracker using a Break Level as the starting point.
         """
-        if initial_level.level_type != LevelType.BREAK_LEVEL:
-            raise ValueError("OriginTracker must start with a BREAK_LEVEL.")
+        if initial_level.level_type not in (LevelType.BREAK_LEVEL, LevelType.ORIGIN_BREAK_LEVEL):
+            raise ValueError("OriginTracker must start with a BREAK_LEVEL or ORIGIN_BREAK_LEVEL.")
         
         self.level_data = initial_level
         # The formulation of the break level itself is NOT a test.
         self.test_count = 0  
         self.test_history = [] # Store as (timestamp, string representation of hit price)
         
-        self.waiting_opposite = True
-        self.waiting_retest = False
+        self.can_be_tested = False
         
         self.is_converted = False
         self.is_active = True
@@ -49,50 +48,33 @@ class OriginTracker:
             self._update_level_model(status="invalidated")
             return
             
-        # Determine basic candle properties
-        green = candle.is_bullish
-        red = candle.is_bearish
-        
-        # We need historical context to check red[1] and green[1].
-        # Assuming the caller doesn't pass history directly, we can maintain the last candle's color.
-        prev_green = getattr(self, '_prev_green', False)
-        prev_red = getattr(self, '_prev_red', False)
-        
-        # Structure Reset (Pine logic)
-        # if (is_break_up and red and red[1]) or (not is_break_up and green and green[1])
-        is_break_up = not self.level_data.is_bullish  # Bearish = is_break_up
-        
-        if (is_break_up and red and prev_red) or (not is_break_up and green and prev_green):
-            self.waiting_opposite = True
-            self.waiting_retest = False
-            
-        if self.waiting_opposite:
-            if is_break_up and green:
-                self.waiting_opposite = False
-                self.waiting_retest = True
-            elif not is_break_up and red:
-                self.waiting_opposite = False
-                self.waiting_retest = True
-                
         # Touch detection
         hit_occurred = is_tested(self.level_data, candle)
-        if self.waiting_retest and hit_occurred:
-            valid_close = green if is_break_up else red
-            if valid_close:
-                self.test_count += 1
-                self.waiting_retest = False
+        if self.can_be_tested and hit_occurred:
+            self.test_count += 1
+            
+            # Determine hit price
+            is_break_up = not self.level_data.is_bullish
+            hit_price = candle.high if is_break_up else candle.low
+            self.test_history.append((candle.timestamp, hit_price))
+            
+            # Escalate to Origin
+            if self.test_count == 2 and self.level_data.level_type in (LevelType.BREAK_LEVEL, LevelType.ORIGIN_BREAK_LEVEL):
+                self._update_level_model(level_type=LevelType.ORIGIN_LEVEL, status="active")
                 
-                # Determine hit price
-                hit_price = candle.high if is_break_up else candle.low
-                self.test_history.append((candle.timestamp, hit_price))
-                
-                # Escalate to Origin
-                if self.test_count == 2 and self.level_data.level_type == LevelType.BREAK_LEVEL:
-                    self._update_level_model(level_type=LevelType.ORIGIN_LEVEL, status="active")
-                    
-        # Store for next iteration
-        self._prev_green = green
-        self._prev_red = red
+        # Air Bubble Separation (for the NEXT hit check)
+        if not self.level_data.is_bullish:
+            # Bearish Break Level: Separates when high is lower than the structure
+            if candle.high < self.level_data.price_low:
+                self.can_be_tested = True
+            else:
+                self.can_be_tested = False
+        else:
+            # Bullish Break Level: Separates when low is higher than the structure
+            if candle.low > self.level_data.price_high:
+                self.can_be_tested = True
+            else:
+                self.can_be_tested = False
 
     def _update_level_model(self, level_type: Optional[LevelType] = None, status: Optional[str] = None):
         """

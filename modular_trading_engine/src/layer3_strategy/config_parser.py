@@ -18,3 +18,7 @@ class ConfigParser:
             data = json.load(f)
             
         return PlaybookConfig(**data)
+
+    @staticmethod
+    def load_playbook_from_dict(data: dict) -> PlaybookConfig:
+        return PlaybookConfig(**data)

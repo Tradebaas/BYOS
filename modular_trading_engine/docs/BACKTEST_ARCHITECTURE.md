@@ -31,8 +31,8 @@ De **Live Bot** zelf (`live_fleet_commander.py`) draait **niet** vanuit `scripts
 | `run_backtest.py` | Offline M1 bar-simulatie | `scripts/backtest/` |
 | `get_topstep_accounts.py` | Live account/JWT utility | `scripts/live/` |
 
-> **Waarom `simulator.py` en `data_vault.py` in `src/layer4_execution/` staan:**
-> De backtest-engine (simulator) implementeert dezelfde interface als de live broker-executielaag. De `pytest-archon` architectuurverifiers eisen dat executielogica in Layer 4 leeft — verplaatsing zou de architectuurtests breken. De scripts in `scripts/backtest/` zijn dunne CLI-wrappers die de engine aanroepen.
+> **Waarom `simulator.py`, `data_vault.py` en `backtest_engine.py` in `src/layer4_execution/` staan:**
+> De backtest-engine implementeert dezelfde interface als de live broker-executielaag. De `pytest-archon` architectuurverifiers eisen dat executielogica in Layer 4 leeft — verplaatsing zou de architectuurtests breken. De `BacktestSession` (in `backtest_engine.py`) bundelt deze componenten tot één Single Source of Truth voor simulaties. De scripts in `scripts/backtest/` zijn uitsluitend dunne CLI-wrappers die de `BacktestSession` aanroepen.
 
 ---
 
@@ -51,9 +51,11 @@ De **Live Bot** zelf (`live_fleet_commander.py`) draait **niet** vanuit `scripts
 ## 🏎 2. De M1 Bar Simulator (De Motor)
 *De snelle "Offline-TopstepX" die maanden aan data in seconden doorslikt.*
 
+* **`src/layer4_execution/backtest_engine.py` (De BacktestSession)**
+   * **Rol: De Centrale Offline Engine.** Waar de live bot draait via `live_fleet_commander.py`, draait de backtest EXCLUSIEF via de `BacktestSession` class. Deze class combineert de data vault, de rules engine, en de pessimistische simulator logica. Het stript alle custom for-loops en fungeert als de Single Source of Truth.
+   
 * **`scripts/backtest/run_backtest.py`**
-   * **Rol: De Tijdreiziger.** In plaats van de live kapitein (`live_fleet_commander.py`), draait deze simulator in "Fast Forward". 
-   * **Hoe het werkt:** Via de CLI start je dit script en wijs een strategie aan (`--strategy <naam>`). De engine injecteert exact hetzelfde JSON playbook als de Live Bot. Als de theorie in Layer 3 roept: "Order!", checkt de simulator vliegensvlug in de CSV of je bracket is geraakt. Slippage en fees kunnen direct door de simulatie-logica wiskundig berekend worden.
+   * **Rol: De Tijdreiziger (CLI Wrapper).** Start dit script via de CLI en wijs een strategie aan (`--strategy <naam>`). Het script laadt de CSV-data, roept `BacktestSession.run()` aan, en print een geformatteerd PnL-rapport inclusief de nieuwste broker commissies. Slippage en fees worden wiskundig meeberekend.
 
 ```bash
 # Backtest de DTD Golden Setup over de laatste 10 dagen:
@@ -86,8 +88,20 @@ Een short limiet order op `108` wordt in deze minuut gevuld, en heeft een TP op 
 Een foute simulator ziet dat de `Low` (`95`) lager is dan de TP (`98`) en registreert een **WIN**. 
 Dit is een illusie! Omdat het een **Bullish candle** betreft (Close > Open), moet de prijs *eerst* gedaald zijn naar `95` (de Low), om vervolgens omhoog te vliegen naar `110` (de High), waar de order pas gevuld wordt op `108`. Vanaf dat punt (de top) daalt hij nog slechts naar de sluiting op `105`. Jouw TP op `98` werd dus na je fill **nooit meer geraakt**. Waarschijnlijk werd in de minuten daaropvolgend onverwachts je SL the pakken genomen. Dit was het verschil tussen een "Backtest-Win" en een "Live-Loss".
 
-### De Oplossing: De 'Synthetic Remainder Candle'
-Om 100% parity te bieden ten opzichte van de live executie (TopStepX), implementeert de M1 Backtest Simulator nu intern een "synthetic remainder candle". Wanneer een limietorder getriggerd wordt, reconstrueert de engine de op/neer volgorde van de minuut op de polariteit (Bullish/Bearish). Dit stript direct de 'pre-fill' data, en bouwt een virtuele rest-candle op ("vanaf het fill moment, tot het einde van de minuut"). SL en TP worden exclusief getoetst aan de rest-capaciteit van de M1 bar, met absolute precisie. Hierdoor matchen jouw live losses 1:1 met de gesimuleerde sessies.
+### De Oplossing: De 'Synthetic Remainder Candle' & Pessimistische Rules
+Om 100% parity te bieden ten opzichte van de live executie (TopStepX), implementeert de M1 Backtest Simulator nu intern een "synthetic remainder candle". Wanneer een limietorder getriggerd wordt, reconstrueert de engine de op/neer volgorde van de minuut op de polariteit (Bullish/Bearish). Dit stript direct de 'pre-fill' data, en bouwt een virtuele rest-candle op ("vanaf het fill moment, tot het einde van de minuut"). 
+
+**Pessimistische Intra-Bar Worst-Case:** Als binnen één M1 candle *zowel* de SL als de TP wordt geraakt, gaat de engine er in de backtest *altijd* van uit dat de SL eerst werd geraakt, ongeacht de kleur van de candle. Dit creëert absolute zekerheid in de win-rates, neutraliseert look-ahead bias volledig en bouwt de meest strenge simulatie die mogelijk is.
+
+Daarnaast wordt standaard over elke afgesloten trade $7.60 aan broker commissies en fees berekend om de uiteindelijke USD netto winst compleet reëel te houden.
+
+### The Stateful Filter Cooldown Illusion (Continuous PnL Passing)
+Tijdens backtesting kan er een enorme discrepantie ontstaan (minder trades in backtest dan live) als de engine de PnL van een afgesloten trade blijft doorgeven op *elke* minuut die daarop volgt. In de live `LiveFleetCommander` wordt het resultaat (`pending_last_trade_result`) exact **één keer** naar de `RuleEngine` gestuurd op het moment van sluiten, en daarna direct gereset naar `None`. 
+
+Als een backtest script (zoals een `.tmp` experiment) simpelweg de laatste trade uit de vault trekt en deze blijft injecteren in `engine.evaluate()`, zal een stateful filter (zoals `LossCooldownFilter`) concluderen dat de *laatste verliesgevende trade* op **de huidige minuut** is gebeurd. Hierdoor wordt de "30 minuten cooldown timer" elke minuut gereset, waardoor er in die richting **nooit meer** getrade wordt. 
+
+**De Oplossing (De 100% Parity Regel):**
+Tijdens elke backtest of sandbox iteratie moet de loop-iterator de lengte van `vault.trades` bijhouden (bijv. `prev_trade_count`). De `last_trade_result` mag **uitsluitend** aan de engine worden doorgegeven als `len(vault.trades) > prev_trade_count`. Daarna moet de state gereset worden. Doe je dit niet, dan vernietig je onbewust je Win-Rate en Trade-Volume simulaties.
 
 ---
 
@@ -101,36 +115,44 @@ Hiervoor is de backtest-architectuur gaandeweg uitgebreid:
 
 ---
 
-## 🧪 6. De `.tmp` Sandbox Workflow
+## 🧪 6. De `.tmp` Sandbox Workflow & Strict Backtest Mandate
 
-De map `.tmp/` dient als **wegwerp-sandbox** voor experimentele research. Het bevat:
+De map `.tmp/` dient als **wegwerp-sandbox** voor experimentele research. Echter, we hebben in het verleden herhaaldelijk dezelfde kapitale fout gemaakt: het schrijven van custom iteratie-scripts (zoals `origin_sweep.py` of `monthly_eval.py`) die zélf proberen PnL uit te rekenen.
+
+### 🚫 De Absolute Hoofdregel voor Backtesting
+**HET IS TEN STRENGSTE VERBODEN OM CUSTOM PNL EVALUATIE-LOOPS TE SCHRIJVEN IN `.tmp` SCRIPTS.**
+
+Elke keer als een AI-agent of ontwikkelaar een snelle iteratie-loop schrijft om "even snel een theorie te backtesten", vallen we ten prooi aan de **Intra-bar Look-Ahead Bias** (zie sectie 4). Deze custom scripts controleren vaak pas op de *volgende* candle of een Stop Loss (SL) is geraakt, en negeren de realiteit dat de SL direct op de entry-candle (de intrabar wick) geraakt had kunnen worden. Hierdoor zagen we in simulaties +$206k winst, wat in realiteit -$13k verlies was.
+
+**De GSD Validatie Pipeline (Single Source of Truth):**
+1. **Theorie bouwen:** Experimenteer met Level detectie en market structure in `.tmp/` scripts. *Je mag hier tellen hoe vaak een theorie voorkomt.*
+2. **Kloon Playbook:** Maak een variant aan van het playbook (`strategy_playbook_experiment.json`) in de officiële `strategies/` map of in `.tmp/`.
+3. **Gebruik de Motor:** Roep **ALTIJD** `scripts/backtest/run_backtest.py` aan via de terminal om de financiële resultaten uit te rekenen. Als je een eigen `.tmp` sweeper of loop schrijft, gebruik dan ALTIJD de `BacktestSession` class uit `src/layer4_execution/backtest_engine.py`. Schrijf NOOIT zelf een iteratie (zoals `for row in df.iterrows()`) voor executie of PnL berekening!
+4. **Accepteer de realiteit:** De `BacktestSession` resultaten zijn onomstotelijk en strikt pessimistisch. Is het verliesgevend? Pas dan theorie aan, maar wantrouw nóóit de engine.
 
 | Bestandstype | Voorbeeld | Doel |
 |---|---|---|
-| Experiment-scripts | `run_trailing_experiment.py`, `run_be_backtest.py` | Geïsoleerde backtest-varianten |
-| Playbook-klonen | `strategy_playbook_be.json`, `strategy_playbook_deep_dive.json` | Alternatieve parametersets |
-| Analyse-scripts | `reconcile_trades.py`, `compare_trades.py`, `advanced_analysis.py` | Post-hoc trade reconciliatie |
-| Gespecialiseerde simulators | `trailing_tp_simulator.py`, `time_exit_simulator.py` | Feature-specifieke tests |
+| Theorie/Setup Detectors | `find_levels.py` | Puur voor het identificeren van setups (ZONDER PnL executie) |
+| Playbook-klonen | `strategy_playbook_be.json` | Alternatieve parametersets voor `run_backtest.py` of `BacktestSession` sweeps |
+| Analyse-scripts | `analyze_mfe_mae.py` | Post-hoc trade reconciliatie na de officiële backtest |
 
-**Workflow:**
-1. Kloon het playbook naar een tijdelijke iteratie in `.tmp/`.
-2. Draai de theorie af in isolatie.
-3. Produceer een analyse (script-output, terminal metrics).
-4. Trek conclusies (bijv. "De statische 12-punt Stop-Loss functioneert wiskundig beter dan een dynamische").
-5. Pas de kennis toe in het productie-playbook.
-6. Ruim output-dumps op (`.log`, `.txt`, `.csv` — deze worden door `.gitignore` geblokkeerd).
+**Workflow stappen:**
+1. Pas de theorie (`Layer 2`) of executie modules (`Layer 3`) aan.
+2. Voer `python3 scripts/backtest/run_backtest.py --strategy <naam> --days 120` uit.
+3. Analyseer de terminal output of de gedumpte CSV-logs.
+4. Ruim output-dumps en overbodige `.tmp` scripts direct op na iteratie.
 
 ---
 
 ## 🔐 7. Architectuur Invarianten
 
-Deze regels worden afgedwongen door `tests/test_architecture.py` (pytest-archon):
+Deze regels worden afgedwongen door de GSD Methodiek en `pytest-archon`:
 
 1. **Layer-scheiding is heilig:** Layer 1 (Data) → Layer 2 (Theorie) → Layer 3 (Strategie) → Layer 4 (Executie). Lagen mogen **nooit** opwaarts importeren.
-2. **`simulator.py` = Layer 4:** De simulator implementeert de broker-executie interface en leeft daarom in `src/layer4_execution/`.
-3. **Scripts importeren de engine, niet andersom:** De `scripts/` map bevat CLI-wrappers die de engine aanroepen via `sys.path`. De engine zelf weet niets van de scripts.
-4. **Productie-code is read-only tijdens research:** Experimentele scripts in `.tmp/` mogen **nooit** productiecode wijzigen.
+2. **`simulator.py` = Layer 4:** De simulator implementeert de broker-executie interface en leeft in `src/layer4_execution/`. Het is de enige code die PnL mag berekenen.
+3. **Scripts importeren de engine, niet andersom:** De `scripts/` map bevat CLI-wrappers die de engine aanroepen.
+4. **Productie-code is read-only tijdens research:** Experimentele scripts in `.tmp/` mogen **nooit** productiecode wijzigen tenzij dit expliciet goedgekeurd is via een plan.
 
 ---
 
-*Laatst bijgewerkt: 28 april 2026 — Herstructurering naar `scripts/live/` + `scripts/backtest/`, tick data support verwijderd op verzoek.*
+*Laatst bijgewerkt: 2 Mei 2026 — Introductie van BacktestSession, Pessimistische Intra-Bar Worst-Case Rules en Broker Commissies.*

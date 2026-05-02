@@ -1,5 +1,11 @@
 {
     "strategy_id": "DTD-Topstep-Golden",
+    "global_settings": {
+        "instrument": "NQ",
+        "multiplier": 20.0,
+        "position_size": 2,
+        "commission": 7.60
+    },
     "pipeline": [
         {
             "module_type": "ConfirmationHoldLevelTrigger",
@@ -7,8 +13,8 @@
                 "bias_window_size": 300,
                 "premium_discount_window_size": 150,
                 "ttl_candles": 15,
-                "sl_points": 12.0,
-                "tp_points": 12.0,
+                "sl_points": 14.0,
+                "tp_points": 14.0,
                 "sim_frontrun_points": 3.0
             }
         },
@@ -60,8 +66,8 @@
                 "tick_size": 0.25,
                 "entry_frontrun_ticks": 12,
                 "stop_loss_padding_ticks": 0,
-                "absolute_sl_points": 12.0,
-                "absolute_tp_points": 12.0,
+                "absolute_sl_points": 14.0,
+                "absolute_tp_points": 14.0,
                 "breakeven_trigger_rr": 0.5,
                 "breakeven_offset_ticks": 2
             }

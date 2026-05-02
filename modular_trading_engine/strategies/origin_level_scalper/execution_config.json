@@ -1,0 +1,15 @@
+{
+    "global_settings": {
+        "poll_interval_sec": 1,
+        "dry_run_mode": false
+    },
+    "accounts": [
+        {
+            "account_id": "1809221",
+            "symbol": "/MNQ",
+            "order_size": 1,
+            "is_active": true,
+            "max_positions": 1
+        }
+    ]
+}

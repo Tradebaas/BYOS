@@ -123,7 +123,7 @@ Als *alles* hier succesvol door resulteert volgt finalisatie van Limit, Stoploss
 De instellingen in het configuratie-bestand worden letterlijk en puur abstract gepompt:
 *   **Tekenformaat (`tick_size`):** 0.25 pt (MNQ/NQ specificeert 4 ticks per punt).
 *   **Absoluut Entry / Frontrunning (`entry_frontrun_ticks`):** 12 ticks = 3.0 volle index punten. De frontrun baseert de Limit placement op de OPEN van je Hold Level met compensatie in the right way (Short Limit ligt -3.0 punten onder de Open; Long Limit staat +3.0 punten op de body) om volume-fills te waarborgen.
-*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (12.0 pts / 48 ticks) en `absolute_tp_points` (12.0 pts / 48 ticks). 
+*   **Absolute Profit/Risk Ratio:** Aangedreven door `absolute_sl_points` (14.0 pts / 56 ticks) en `absolute_tp_points` (14.0 pts / 56 ticks). 
 *   **Breakeven Shield:** Bevat geavanceerd trade management! Met `breakeven_trigger_rr: 0.5` schuift de broker native de stoploss naar je instapprijs (+ `breakeven_offset_ticks: 2` voor fees) zodra de trade halverwege zijn target is (op +6 punten winst in dit geval). Dit dekt je in tegen plotselinge reversals.
 
 ### Samengevat
