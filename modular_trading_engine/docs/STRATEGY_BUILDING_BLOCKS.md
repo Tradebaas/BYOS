@@ -45,6 +45,13 @@ Dit is de kloppende hartklep van je Setup-Detectie. Het is een 1-minuut Sweep & 
   4. Prijs < 50%: **Discount** Zone (Hier keurt hij alléén Long-setups goed).
 * **Output:** Bij een harde sweep, confirm én Premium/Discount conformering spuugt hij de wiskundige target uit naar de rest van de pipeline.
 
+### `OriginLevelTrigger`
+Dit is de gespecialiseerde L3 trigger ontworpen voor de geïsoleerde Origin Scalper strategie.
+* **Flow:** Scant de actieve L2 `MarketTheoryState` passief voor levende `OriginTracker` objecten.
+* **Filter Logica:** Vuurt exclusief een target (Intent) af naar de pipeline wanneer een Break Level precies één keer getest is (`test_count == 1`) én de luchtbel actief is (`waiting_retest == True`).
+* **Premium/Discount:** Beschikt over een optionele `premium_discount_window_size` (standaard uitgeschakeld met 0). Indien aan, dwingt hij de setup af te spelen in de logische macrorichting.
+* **Output:** Als aan de stricte logica is voldaan, maakt hij een Target Candidate op de *exacte* rand van het theorie-level voor verdere L4 executie (als limit order).
+
 ### `KillzoneFilter`
 * **Functie:** Tijdslot-filter. Bepaalt of de tijd van de dag wel is toegestaan om the handelen (bijv. in `America/New_York` timezone). Buiten deze zone sneuvelt iedere opgebouwde theorie direct on the spot.
 

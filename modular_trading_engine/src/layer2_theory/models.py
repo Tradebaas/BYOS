@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class LevelType(str, Enum):
     HOLD_LEVEL = "hold_level"
     BREAK_LEVEL = "break_level"
+    ORIGIN_BREAK_LEVEL = "origin_break_level"
     ORIGIN_LEVEL = "origin_level"
     REVERSE_LEVEL = "reverse_level"
     TREND_LINE = "trend_line"

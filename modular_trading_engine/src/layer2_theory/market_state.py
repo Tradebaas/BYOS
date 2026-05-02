@@ -86,6 +86,7 @@ class MarketTheoryState:
         if len(self.candle_buffer) == 3:
             c1, c2, c3 = self.candle_buffer
             
+            # GOLDEN SETUP LOGIC (Strict color requirement)
             # Resistance Break Level (Bearish Break: green, red, red -> take high of red(1))
             if c1.is_bullish and c2.is_bearish and c3.is_bearish:
                 new_levels.append(TheoryLevel(
@@ -108,13 +109,35 @@ class MarketTheoryState:
                     price_open=c2.open,
                     status="identified"
                 ))
+                
+            # ORIGIN SCALPER LOGIC (Strict color requirement restored)
+            if c1.is_bullish and c2.is_bearish and c3.is_bearish:
+                new_levels.append(TheoryLevel(
+                    timestamp=c2.timestamp,
+                    level_type=LevelType.ORIGIN_BREAK_LEVEL,
+                    is_bullish=False,
+                    price_high=c2.high,
+                    price_low=c2.high,
+                    price_open=c2.open,
+                    status="identified"
+                ))
+            if c1.is_bearish and c2.is_bullish and c3.is_bullish:
+                new_levels.append(TheoryLevel(
+                    timestamp=c2.timestamp,
+                    level_type=LevelType.ORIGIN_BREAK_LEVEL,
+                    is_bullish=True,
+                    price_high=c2.low,
+                    price_low=c2.low,
+                    price_open=c2.open,
+                    status="identified"
+                ))
             
         # 2. Spawning Secondary Trackers
         for level in new_levels:
             self.all_theory_levels.append(level)
             
-            # When a new valid Break Level is established, track Origin escalations
-            if level.level_type == LevelType.BREAK_LEVEL:
+            # When a new valid ORIGIN Break Level is established, track Origin escalations
+            if level.level_type == LevelType.ORIGIN_BREAK_LEVEL:
                 self.origin_trackers.append(OriginTracker(initial_level=level))
                 
         # Protect memory leakage during prolonged uptime (max history matches self.history constraint)

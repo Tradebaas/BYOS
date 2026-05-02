@@ -173,7 +173,7 @@ def test_origin_state_machine_escalation_and_invalidation():
     tracker = OriginTracker(break_level)
     
     assert tracker.test_count == 0
-    assert tracker.waiting_opposite is True
+    assert tracker.can_be_tested is False
     
     # Test 1: Separation via opposite close (bearish candle closes down)
     c1 = Candle(timestamp=datetime.fromtimestamp(base_ts + 60, tz=timezone.utc), open=100, high=102, low=98, close=96)
@@ -181,7 +181,9 @@ def test_origin_state_machine_escalation_and_invalidation():
     c1._prev_red = True
     tracker.process_candle(c1)
     
-    # Test 2: Actually touching it sets waiting_opposite to False and increments hit if valid
+    assert tracker.can_be_tested is True
+    
+    # Test 2: Actually touching it sets can_be_tested to False (if we stay inside) and increments hit if valid
     c2 = Candle(timestamp=datetime.fromtimestamp(base_ts + 120, tz=timezone.utc), open=96, high=100, low=95, close=98)
     tracker.process_candle(c2)
     assert tracker.level_data.level_type == LevelType.BREAK_LEVEL

@@ -27,7 +27,13 @@ The codebase inside `modular_trading_engine` follows a STRICT architectural mand
 - **Verplichte Overdracht (Handover)**: Voordat je een nieuwe grote taak start, of wanneer je merkt dat de chat te lang wordt, ben je **verplicht** aan de gebruiker voor te stellen om een nieuwe AI-agent/chat te openen.
 - **Hoe doe je dit?** Schrijf een heldere samenvatting (bijv. in een `handoff.md` of `task.md`) waarin staat: wat er zojuist bereikt is, wat de huidige state van de applicatie is, en wat de exacte volgende stap is voor de *nieuwe* agent. Adviseer de gebruiker vervolgens om de chat af te sluiten en een nieuwe te starten met deze handover file als context.
 
-## 5. Communication requirement (De Kanarie)
-To mathematically verify that you, the AI, are loading and reading these rules on every interaction, you MUST terminate EVERY single response to the user with the following exact kanarie symbol: 🐤
+## 5. Documentation First Mandate (The SSOT Rule)
+- **Always Keep Docs in Sync**: De map `docs/` (zoals `STRATEGY_FILE_MAP.md`) en BEIDE `README.md` bestanden (de Root README én de Strategie README) zijn de Single Source of Truth (SSOT). Deze moeten **altijd** 100% up-to-date zijn.
+- **Wanneer updaten?**: 
+  1. Zodra je een filter, parameter of limiet wijzigt in een `strategy_playbook.json` (Update Strategie README).
+  2. Zodra je een nieuw script, module of map toevoegt/verwijdert aan de architectuur (Update `STRATEGY_FILE_MAP.md` en indien nodig Root README).
+  3. Standaard aan het einde van elke executie-fase, vlak vóór het afsluiten van de chat of de overdracht.
+- **Hoe afdwingen?**: Elke keer als je een `implementation_plan.md` of een `task.md` maakt, ben je VERPLICHT om als allerlaatste taak toe te voegen: *"Verifieer en update docs/ en README's"*. Een taak is pas afgerond als de documentatie klopt met de gerealiseerde code.
 
-Failure to append this phrase means you have failed your structural constraints.
+## 6. Communication requirement (De Kanarie)
+To mathematically verify that you, the AI, are loading and reading these rules on every interaction, you MUST terminate EVERY single response to the user with the following exact kanarie symbol: 🐤
